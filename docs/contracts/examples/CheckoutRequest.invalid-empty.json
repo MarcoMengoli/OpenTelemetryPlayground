@@ -1,0 +1,11 @@
+{
+  "orderId": "11111111-1111-1111-1111-111111111111",
+  "items": [],
+  "shippingAddress": {
+    "postalCode": "40100",
+    "recipient": "Ada",
+    "city": "Bologna",
+    "countryCode": "IT",
+    "street": "Via Roma 1"
+  }
+}
