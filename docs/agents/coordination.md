@@ -45,9 +45,25 @@ Comandi .NET, test RabbitMQ, contratti e parametri di isolamento dipendono dalla
 consegna US02: non sono ancora verificati in questa base. Il collegamento alla issue
 US02 è intenzionale finché B non pubblica percorsi reali; non usare nomi inventati.
 
-A aggiorna qui i riferimenti tecnici e i comandi dopo la consegna di B, e li riusa
-identici nella pipeline. Finché manca la base, la CI deve rendere esplicita la
-dipendenza: non saltare build/test per produrre un falso verde.
+La [consegna preliminare di B](https://github.com/MarcoMengoli/OpenTelemetryPlayground/issues/2#issuecomment-6353293088)
+propone SDK da `global.json`, `dotnet restore --locked-mode`,
+`dotnet build --no-restore -c Release`, `dotnet test --no-build -c Release` e
+`./scripts/lab.ps1 start|ready|verify|stop|reset -Name us01-a -PortBase 18300`
+(ogni azione è una chiamata distinta in PowerShell 7). La pipeline è predisposta
+su queste chiamate; gli esiti e i riferimenti finali dipendono ancora da US02.
+
+Il workflow [ci.yml](../../.github/workflows/ci.yml) usa runner Ubuntu, SDK fissato
+da B e ambiente univoco per run. Esegue restore, guard architetturale, build, test,
+start/readiness e verify con broker reale, poi stop, raccolta log e reset del solo
+ambiente CI anche in caso di errore. Se US02 manca, il job fallisce esplicitamente:
+non salta build/test per produrre un falso verde. Il job separato `guard-tests`
+verifica il controllo statico, senza certificare la base tecnica.
+
+Controlli A disponibili: `python -B -m unittest discover -s .github/tests -v` e,
+dopo restore, `python .github/scripts/check_architecture.py --require-restored`.
+Il guard legge manifest e dipendenze risolte e cerca possibili violazioni nel codice;
+la review resta necessaria per propagazione manuale e altri casi non riconoscibili
+staticamente. A aggiorna questa sezione con la consegna verificata di B.
 
 ## Checkpoint e integrazione
 
