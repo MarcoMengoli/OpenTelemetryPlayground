@@ -17,19 +17,19 @@ su [GitHub](https://github.com/MarcoMengoli/OpenTelemetryPlayground/issues).
 - Persistenza, idempotenza, outbox e retry limitati richiesti dalla singola issue
   appartengono alla sua implementazione, non vanno rinviati alle verifiche finali.
 
-## Responsabilità e fonti
+## Ambiti e fonti
 
-- A: questo file, `docs/agents/`, `.agents/skills/playground-issue-workflow/`,
-  `.github/` e backlog GitHub. B: soluzione, SDK/dipendenze, `src/`, `tests/`,
-  infrastruttura/script, README e documentazione tecnica della base US02.
-- Nei percorsi successivi vale l'ambito della singola issue. Contratti e componenti
-  condivisi restano coordinati con B: proporre cambiamenti e impatto sui due percorsi
-  prima di modificarli; non inventare payload alternativi.
+- US01: questo file, `docs/agents/`, `.agents/skills/playground-issue-workflow/`,
+  `.github/` e backlog GitHub. US02: soluzione, SDK/dipendenze, `src/`, `tests/`,
+  infrastruttura/script, README e documentazione tecnica della base.
+- Le issue successive definiscono servizi e test modificabili. Per contratti e file
+  condivisi, esplicitare l'impatto sulle issue dipendenti e coordinare le PR aperte;
+  non inventare payload alternativi o sovrascrivere lavoro estraneo alla issue.
 - Usare la skill [$playground-issue-workflow](.agents/skills/playground-issue-workflow/SKILL.md)
-  per implementare/riprendere una issue. Incarichi: [A](docs/agents/agent-a.md),
-  [B](docs/agents/agent-b.md); [coordinamento e verifiche](docs/agents/coordination.md).
-- A coordina il checkpoint di integrazione; il maintainer autorizza/esegue i merge.
-  Una PR aperta, CI verde o review conclusa non autorizza il merge né la chiusura issue.
+  per implementare/riprendere una issue; [guida operativa](docs/agents/workflow.md)
+  e [integrazione e verifiche](docs/agents/coordination.md) descrivono dipendenze e comandi.
+- Il maintainer autorizza/esegue i merge. Una PR aperta, CI verde o review conclusa
+  non autorizza il merge né la chiusura issue; servono integrazione e verifiche.
 
 ## Verifiche
 
