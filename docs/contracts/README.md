@@ -174,4 +174,3 @@ Al riavvio Orders ripete capture con AuthorizationId se l'esito locale era ambig
 stesso CaptureId, poi fattura con CaptureId. Nessuna nuova identità per aggirare un timeout.
 Impatto: US03 implementa le tre route aggiuntive; US06 osserva Captured e recupera fatturazione;
 il percorso Fulfillment e i contratti file/messaggi restano invariati.
-

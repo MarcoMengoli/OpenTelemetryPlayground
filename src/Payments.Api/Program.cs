@@ -9,4 +9,3 @@ app.MapPost("/api/v1/authorization-cancellations", () => FoundationHost.NotImple
 app.MapPost("/api/v1/invoices", () => FoundationHost.NotImplemented());
 app.MapGet("/api/v1/payments/{orderId:guid}", () => FoundationHost.NotImplemented());
 await app.RunAsync();
-

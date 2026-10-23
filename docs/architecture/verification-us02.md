@@ -33,3 +33,18 @@ La versione fissata 10.0.13 risolve il problema; non è stato disattivato NuGet 
 
 Review Codex GitHub: ancora da richiedere alla pubblicazione della PR. Richiesta, presa in carico
 e completamento saranno registrati nella PR; nessun merge o chiusura issue è autorizzato.
+
+## Prima esecuzione integrata su Ubuntu
+
+A ha eseguito US01+US02 sul commit di integrazione `f233274` (US02 `5c50a74`):
+[run 39905289531](https://github.com/MarcoMengoli/OpenTelemetryPlayground/actions/runs/39905289531).
+Restore, guard architetturale (anche dipendenze transitive), build, avvio e readiness degli **otto
+host** sono riusciti. Il test con broker RabbitMQ reale ha concluso **7 passed, 0 skipped**:
+confirm, mandatory return, business OrderId, redelivery e acknowledgement effettivi.
+
+La run complessiva è fallita dopo il test broker: PowerShell Linux richiede `-Force` per eliminare
+il file probe nascosto; il confronto DateTime StartTime dei PID fra processi PowerShell produce
+un mismatch su Linux. Correzione: rimozione mirata con Force e identità immutabile del kernel
+(`/proc/<pid>/stat`, campo starttime), mantenendo controllo dell'eseguibile. Windows continua
+ad usare l'istante di creazione del processo. Stop/reset richiedono una nuova run prima di essere
+considerati verificati. Nessuna di queste prove remote rende Docker locale funzionante.

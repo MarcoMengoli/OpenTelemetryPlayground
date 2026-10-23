@@ -83,4 +83,3 @@ SDK in global.json, pacchetti in Directory.Packages.props, immagine in infra/com
 Payload/ID/stati sono fissati in docs/contracts/README.md e Playground.Contracts/Contracts.cs.
 Qualsiasi modifica successiva richiede indicare impatto su entrambi i percorsi.
 Non eseguire US03/US07 dalla presunzione che una PR aperta sia già integrata.
-
