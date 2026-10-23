@@ -10,7 +10,7 @@ solo l'infrastruttura di base, non il flusso ecommerce.
 ## Prerequisiti e versioni
 
 - .NET SDK **10.0.400** esatto (`global.json`), target `net10.0`.
-- PowerShell 7.2+ (`pwsh`) per gli script, su Windows/Linux/macOS.
+- PowerShell 7.2+ (`pwsh`) per gli script, su Windows/Linux.
 - Docker con daemon Linux funzionante e Docker Compose v2.
 - Porte libere: base e base+1 per RabbitMQ, base+10..17 per gli host.
 - Nessun account cloud. Il primo restore/pull richiede accesso a NuGet/Docker Hub.
@@ -77,7 +77,7 @@ loopback: queste credenziali non sono destinate a un deployment condiviso o in p
 - Database: `.local/<Name>/data/<Service>/state.db`, uno per host.
 - File: `.local/<Name>/warehouse/{requests,responses,processed,errors}`.
 - Log Serilog console catturati in `.local/<Name>/logs/<Service>.log` e `.err.log`.
-- Il manifest `.local/<Name>/processes.json` conserva PID e istante di avvio. `stop` verifica
+- Il manifest `.local/<Name>/processes.json` conserva PID e identità di avvio del sistema operativo. `stop` verifica
   la proprietà del processo e chiede lo shutdown tramite `.local/<Name>/run/<Service>.stop`.
   È un controllo locale del ciclo di vita, separato dai contratti business del magazzino.
 - `stop` conserva dati e volume. `reset` verifica ownership e percorsi prima della rimozione;
@@ -103,4 +103,3 @@ comune agli host del solo ambiente scelto. Le variabili corrispondono a `Lab:Nam
 Disponibilità inventario garantita nella prima versione: Inventory e Fulfillment procedono in
 parallelo. Pagamenti, fatture, corrieri e magazzino sono simulati. Nessuna UI richiesta.
 A possiede AGENTS.md, skill, docs/agents, backlog e workflow: questa PR non ne crea copie.
-

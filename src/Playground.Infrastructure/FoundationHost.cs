@@ -97,5 +97,3 @@ public sealed class FoundationLifecycle(string service, LabSettings settings, IL
     }
     public async ValueTask DisposeAsync() { if (Interlocked.Exchange(ref disposed, 1) != 0) return; await stopWatching.CancelAsync(); if (stopWatcher is not null) await stopWatcher; stopWatching.Dispose(); if (connection is not null) await connection.DisposeAsync(); }
 }
-
-

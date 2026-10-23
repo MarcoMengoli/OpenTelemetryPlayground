@@ -7,6 +7,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if (!$IsWindows -and !$IsLinux) { throw "This script supports Windows and Linux." }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $localRoot = Join-Path $repo '.local'
 $labRoot = [IO.Path]::GetFullPath((Join-Path $localRoot $Name))
@@ -39,6 +40,16 @@ function Assert-Owner {
     if ($owner.repo -ne $repo -or $owner.project -ne $project -or $owner.portBase -ne $PortBase) { throw 'Environment ownership/port mismatch. Use the original Name and PortBase.' }
 }
 function Save-Processes($processes) { ConvertTo-Json -InputObject @($processes) -Depth 5 | Set-Content -LiteralPath $manifestPath }
+function Get-ProcessIdentity($process) {
+    if ($IsLinux) {
+        # /proc field 22 is the immutable kernel start tick. DateTime StartTime can vary
+        # across .NET processes because Unix boot time is converted to wall-clock time.
+        $stat = Get-Content -LiteralPath "/proc/$($process.Id)/stat" -Raw
+        $fields = $stat.Substring($stat.LastIndexOf(')') + 2).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+        return "linux:$($fields[19])"
+    }
+    return "windows:$($process.StartTime.ToUniversalTime().Ticks)"
+}
 function Stop-Hosts {
     if (!(Test-Path -LiteralPath $manifestPath)) { return }
     $processes = @(Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json)
@@ -46,7 +57,7 @@ function Stop-Hosts {
         $process = Get-Process -Id $entry.pid -ErrorAction SilentlyContinue
         if (!$process) { continue }
         # A recycled PID must never target another application's process.
-        if ($process.StartTime.ToUniversalTime().Ticks.ToString() -ne $entry.startTicks -or $process.Path -ne $entry.executable) { throw "PID ownership mismatch for $($entry.service); refusing to stop it." }
+        if ((Get-ProcessIdentity $process) -ne $entry.identity -or $process.Path -ne $entry.executable) { throw "PID ownership mismatch for $($entry.service); refusing to stop it." }
         Set-Content -LiteralPath (Join-Path $labRoot "run/$($entry.service).stop") -Value stop
         if (!$process.WaitForExit(15000)) { throw "Host $($entry.service) did not stop gracefully; inspect its log. No unrelated process was killed." }
     }
@@ -99,7 +110,8 @@ try {
                         RedirectStandardOutput=(Join-Path $labRoot "logs/$service.log"); RedirectStandardError=(Join-Path $labRoot "logs/$service.err.log") }
                     if ($IsWindows) { $options.WindowStyle = 'Hidden' }
                     $process = Start-Process @options
-                    $processes += @{ pid=$process.Id; service=$service; startTicks=$process.StartTime.ToUniversalTime().Ticks.ToString(); executable=$process.Path }
+                    $process = Get-Process -Id $process.Id
+                    $processes += @{ pid=$process.Id; service=$service; identity=(Get-ProcessIdentity $process); executable=$process.Path }
                     Save-Processes $processes
                 }
                 $deadline = [DateTime]::UtcNow.AddSeconds(60)
@@ -144,7 +156,7 @@ try {
                 $probe = Join-Path $labRoot "warehouse/$folder/.verify-$([Guid]::NewGuid().ToString('N'))"
                 Set-Content -LiteralPath $probe -Value 'directory-probe'
                 if ((Get-Content -LiteralPath $probe) -ne 'directory-probe') { throw 'Directory read/write failed.' }
-                Remove-Item -LiteralPath $probe
+                Remove-Item -LiteralPath $probe -Force
             }
             $response = Invoke-WebRequest "http://127.0.0.1:$($PortBase+10)/api/v1/orders" -Method Post -ContentType 'application/json' -Body '{}' -SkipHttpErrorCheck
             if ($response.StatusCode -ne 501 -or ($response.Content | ConvertFrom-Json).code -ne 'not_implemented') { throw 'Foundation must not pretend checkout works.' }
@@ -152,4 +164,3 @@ try {
         }
     }
 } finally { Pop-Location }
-
