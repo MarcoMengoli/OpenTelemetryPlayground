@@ -60,6 +60,8 @@ function Stop-Hosts {
         if ((Get-ProcessIdentity $process) -ne $entry.identity -or $process.Path -ne $entry.executable) { throw "PID ownership mismatch for $($entry.service); refusing to stop it." }
         Set-Content -LiteralPath (Join-Path $labRoot "run/$($entry.service).stop") -Value stop
         if (!$process.WaitForExit(15000)) { throw "Host $($entry.service) did not stop gracefully; inspect its log. No unrelated process was killed." }
+        $logPath = Join-Path $labRoot "logs/$($entry.service).log"
+        if (!(Select-String -LiteralPath $logPath -SimpleMatch "Host stopped")) { throw "Missing shutdown log for $($entry.service); inspect host output." }
     }
     Remove-Item -LiteralPath $manifestPath
 }
@@ -106,8 +108,12 @@ try {
                     $service = $services[$i]
                     $env:ASPNETCORE_URLS = "http://127.0.0.1:$($PortBase + 10 + $i)"
                     $dll = Join-Path $repo "src/$service/bin/Release/net10.0/$service.dll"
-                    $options = @{ FilePath=(Get-Command dotnet).Source; ArgumentList=@('"' + $dll + '"'); WorkingDirectory=$repo; PassThru=$true;
-                        RedirectStandardOutput=(Join-Path $labRoot "logs/$service.log"); RedirectStandardError=(Join-Path $labRoot "logs/$service.err.log") }
+                    $runner = Join-Path $PSScriptRoot 'run-host.ps1'
+                    $logPath = Join-Path $labRoot "logs/$service.log"
+                    $errorLogPath = Join-Path $labRoot "logs/$service.err.log"
+                    $options = @{ FilePath=(Get-Command pwsh).Source;
+                        ArgumentList=@('-NoProfile', '-File', "`"$runner`"", '-Dll', "`"$dll`"", '-LogPath', "`"$logPath`"", '-ErrorLogPath', "`"$errorLogPath`"");
+                        WorkingDirectory=$repo; PassThru=$true }
                     if ($IsWindows) { $options.WindowStyle = 'Hidden' }
                     $process = Start-Process @options
                     $process = Get-Process -Id $process.Id
@@ -164,3 +170,4 @@ try {
         }
     }
 } finally { Pop-Location }
+
