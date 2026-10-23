@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Checkout.Api/Checkout.Api.csproj" />
+    <Project Path="src/Couriers.Api/Couriers.Api.csproj" />
+    <Project Path="src/Fulfillment.Service/Fulfillment.Service.csproj" />
+    <Project Path="src/Inventory.Service/Inventory.Service.csproj" />
+    <Project Path="src/Orders.Service/Orders.Service.csproj" />
+    <Project Path="src/Payments.Api/Payments.Api.csproj" />
+    <Project Path="src/Playground.Contracts/Playground.Contracts.csproj" />
+    <Project Path="src/Playground.Infrastructure/Playground.Infrastructure.csproj" />
+    <Project Path="src/Warehouse.Simulator/Warehouse.Simulator.csproj" />
+    <Project Path="src/WarehouseResponse.Service/WarehouseResponse.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Playground.Tests/Playground.Tests.csproj" />
+  </Folder>
+</Solution>
