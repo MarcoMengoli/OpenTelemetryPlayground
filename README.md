@@ -104,4 +104,3 @@ comune agli host del solo ambiente scelto. Le variabili corrispondono a `Lab:Nam
 Disponibilità inventario garantita nella prima versione: Inventory e Fulfillment procedono in
 parallelo. Pagamenti, fatture, corrieri e magazzino sono simulati. Nessuna UI richiesta.
 A possiede AGENTS.md, skill, docs/agents, backlog e workflow: questa PR non ne crea copie.
-

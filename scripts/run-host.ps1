@@ -1,11 +1,15 @@
 #requires -Version 7.2
-# Keep the output owner alive for the entire host lifetime. Redirecting via Start-Process
-# in the short-lived lab.ps1 caller loses later console output when that caller exits.
+# Own output until the host exits, and flush each console line for live readiness/log checks.
 param(
     [Parameter(Mandatory)][string]$Dll,
     [Parameter(Mandatory)][string]$LogPath,
     [Parameter(Mandatory)][string]$ErrorLogPath
 )
 $ErrorActionPreference = 'Stop'
-& dotnet $Dll 1> $LogPath 2> $ErrorLogPath
-exit $LASTEXITCODE
+$writer = [IO.StreamWriter]::new($LogPath, $false, [Text.UTF8Encoding]::new($false))
+$writer.AutoFlush = $true
+try {
+    & dotnet $Dll 2> $ErrorLogPath | ForEach-Object { $writer.WriteLine($_) }
+    $hostExitCode = $LASTEXITCODE
+} finally { $writer.Dispose() }
+exit $hostExitCode
