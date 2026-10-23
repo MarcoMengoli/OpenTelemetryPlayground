@@ -1,0 +1,20 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.1.4-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: playground
+      RABBITMQ_DEFAULT_PASS: local-playground-only
+      RABBITMQ_DEFAULT_VHOST: ${LAB_NAME:?Set LAB_NAME}
+    ports:
+      - "127.0.0.1:${LAB_RABBIT_PORT:?Set LAB_RABBIT_PORT}:5672"
+      - "127.0.0.1:${LAB_MANAGEMENT_PORT:?Set LAB_MANAGEMENT_PORT}:15672"
+    volumes:
+      - rabbit-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+volumes:
+  rabbit-data:
