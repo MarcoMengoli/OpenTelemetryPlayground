@@ -49,7 +49,7 @@ pwsh ./scripts/lab.ps1 reset  -Name us02-b -PortBase 18200
 ```
 
 `start` richiede la build Release già eseguita. Avvia Compose, attende la salute del broker,
-poi avvia otto processi locali e controlla la loro readiness. Fallisce se le porte sono occupate.
+poi avvia otto host locali e controlla la loro readiness. Fallisce se le porte sono occupate.
 `verify` abilita il test RabbitMQ reale: publish con confirm/mandatory, consumo con OrderId,
 nack/requeue, redelivery, ack e verifica della coda vuota; verifica anche un messaggio non
 instradabile. Usa exchange e coda unici, rimossi alla fine. Verifica inoltre log di avvio,
@@ -76,7 +76,8 @@ loopback: queste credenziali non sono destinate a un deployment condiviso o in p
 - Il vhost è `<Name>`, exchange e code sono prefissati da `<Name>`; i test aggiungono un UUID.
 - Database: `.local/<Name>/data/<Service>/state.db`, uno per host.
 - File: `.local/<Name>/warehouse/{requests,responses,processed,errors}`.
-- Log Serilog console catturati in `.local/<Name>/logs/<Service>.log` e `.err.log`.
+- Ogni host ha un piccolo processo PowerShell attivo fino alla sua uscita: conserva i log
+  anche dopo che `start` termina. Log Serilog console catturati in `.local/<Name>/logs/<Service>.log` e `.err.log`.
 - Il manifest `.local/<Name>/processes.json` conserva PID e identità di avvio del sistema operativo. `stop` verifica
   la proprietà del processo e chiede lo shutdown tramite `.local/<Name>/run/<Service>.stop`.
   È un controllo locale del ciclo di vita, separato dai contratti business del magazzino.
@@ -103,3 +104,4 @@ comune agli host del solo ambiente scelto. Le variabili corrispondono a `Lab:Nam
 Disponibilità inventario garantita nella prima versione: Inventory e Fulfillment procedono in
 parallelo. Pagamenti, fatture, corrieri e magazzino sono simulati. Nessuna UI richiesta.
 A possiede AGENTS.md, skill, docs/agents, backlog e workflow: questa PR non ne crea copie.
+

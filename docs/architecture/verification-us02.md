@@ -48,3 +48,15 @@ un mismatch su Linux. Correzione: rimozione mirata con Force e identità immutab
 (`/proc/<pid>/stat`, campo starttime), mantenendo controllo dell'eseguibile. Windows continua
 ad usare l'istante di creazione del processo. Stop/reset richiedono una nuova run prima di essere
 considerati verificati. Nessuna di queste prove remote rende Docker locale funzionante.
+
+## Seconda run e verifica aggiuntiva del logging
+
+La run [39905665082](https://github.com/MarcoMengoli/OpenTelemetryPlayground/actions/runs/39905665082)
+sul commit integrato `3204ed5` (B `c8c9dbe`) è verde: restore, guard, build, test, start, ready,
+verify (7 passati), stop e reset. Tuttavia l'ispezione degli artefatti ha evidenziato log limitati
+all'avvio: la redirezione di Start-Process dipendeva dalla sessione breve di `lab.ps1`.
+
+Correzione aggiuntiva: `scripts/run-host.ps1` conserva la redirezione per tutta la vita del processo
+host. `stop` ora verifica esplicitamente la presenza di `Host stopped` dopo l'uscita del processo.
+Serve una nuova run per certificare anche questa verifica più forte, senza confondere un comando
+stop riuscito con una prova dei log di shutdown.
