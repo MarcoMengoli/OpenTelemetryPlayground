@@ -40,17 +40,36 @@ pulizia. Un test non avviabile per conflitto/prerequisito è non verificato.
 
 ## Base tecnica e verifiche
 
-Sulla base iniziale `main` (`63da890`) sono presenti solo README e licenza.
-Comandi .NET, test RabbitMQ, contratti e parametri di isolamento dipendono dalla
-consegna US02: non sono ancora verificati in questa base. Il collegamento alla issue
-US02 è intenzionale finché B non pubblica percorsi reali; non usare nomi inventati.
+La base tecnica è consegnata nella [PR US02 #14](https://github.com/MarcoMengoli/OpenTelemetryPlayground/pull/14),
+commit `5c50a74`; consultare nel checkout integrato gli stessi percorsi. Riferimenti
+alla consegna verificabili anche prima del merge:
 
-La [consegna preliminare di B](https://github.com/MarcoMengoli/OpenTelemetryPlayground/issues/2#issuecomment-6353293088)
-propone SDK da `global.json`, `dotnet restore --locked-mode`,
-`dotnet build --no-restore -c Release`, `dotnet test --no-build -c Release` e
-`./scripts/lab.ps1 start|ready|verify|stop|reset -Name us01-a -PortBase 18300`
-(ogni azione è una chiamata distinta in PowerShell 7). La pipeline è predisposta
-su queste chiamate; gli esiti e i riferimenti finali dipendono ancora da US02.
+- [README: versioni e comandi](https://github.com/MarcoMengoli/OpenTelemetryPlayground/blob/5c50a74517341d4507a3fd093383d15cf4970872/README.md).
+- [Architettura e persistenza](https://github.com/MarcoMengoli/OpenTelemetryPlayground/blob/5c50a74517341d4507a3fd093383d15cf4970872/docs/architecture/README.md).
+- [Contratti HTTP, messaggi, file e stati](https://github.com/MarcoMengoli/OpenTelemetryPlayground/blob/5c50a74517341d4507a3fd093383d15cf4970872/docs/contracts/README.md),
+  [DTO e validazione](https://github.com/MarcoMengoli/OpenTelemetryPlayground/blob/5c50a74517341d4507a3fd093383d15cf4970872/src/Playground.Contracts/Contracts.cs).
+- [Esiti locali e limiti US02](https://github.com/MarcoMengoli/OpenTelemetryPlayground/blob/5c50a74517341d4507a3fd093383d15cf4970872/docs/architecture/verification-us02.md).
+
+Dalla radice, con .NET SDK fissato in `global.json`, PowerShell **7.2+** e Docker Linux:
+
+```powershell
+dotnet restore --locked-mode
+dotnet build --no-restore -c Release
+dotnet test --no-build -c Release
+./scripts/lab.ps1 start  -Name us01-a -PortBase 18300
+./scripts/lab.ps1 ready  -Name us01-a -PortBase 18300
+./scripts/lab.ps1 verify -Name us01-a -PortBase 18300
+./scripts/lab.ps1 stop   -Name us01-a -PortBase 18300
+./scripts/lab.ps1 reset  -Name us01-a -PortBase 18300
+```
+
+B ha verificato restore/build e test offline: 6 passati, 1 broker skipped.
+`verify` richiede l'ambiente già avviato e abilita il test RabbitMQ reale; lo skip del
+comando offline non dimostra quel trasferimento. Gli esiti di CI sulla combinazione
+US01/US02 sono registrati nelle PR con SHA e run, separati dai risultati locali.
+Usare sempre la stessa coppia Name/PortBase per stop/reset; A usa 18300/18301 e
+18310–18317, B 18200/18201 e 18210–18217. Dati sotto `.local/<Name>/`, database per
+servizio, vhost e prefissi broker `<Name>`, progetto Compose con hash del worktree.
 
 Il workflow [ci.yml](../../.github/workflows/ci.yml) usa runner Ubuntu, SDK fissato
 da B e ambiente univoco per run. Esegue restore, guard architetturale, build, test,
@@ -63,7 +82,7 @@ Controlli A disponibili: `python -B -m unittest discover -s .github/tests -v` e,
 dopo restore, `python .github/scripts/check_architecture.py --require-restored`.
 Il guard legge manifest e dipendenze risolte e cerca possibili violazioni nel codice;
 la review resta necessaria per propagazione manuale e altri casi non riconoscibili
-staticamente. A aggiorna questa sezione con la consegna verificata di B.
+staticamente. Aggiornare comandi e workflow insieme se cambia la base tecnica.
 
 ## Checkpoint e integrazione
 
