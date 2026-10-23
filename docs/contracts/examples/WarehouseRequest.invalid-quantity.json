@@ -1,0 +1,20 @@
+{
+  "shippingAddress": {
+    "postalCode": "40100",
+    "recipient": "Ada",
+    "city": "Bologna",
+    "countryCode": "IT",
+    "street": "Via Roma 1"
+  },
+  "estimatedDays": 2,
+  "schemaVersion": 1,
+  "courierCode": "SIM",
+  "items": [
+    {
+      "quantity": 0,
+      "sku": "BOOK",
+      "unitPrice": 12.5
+    }
+  ],
+  "warehouseReference": "WH-0001"
+}
