@@ -8,6 +8,7 @@
     <ProjectReference Include="../../src/Couriers.Api/Couriers.Api.csproj" />
     <ProjectReference Include="../../src/Fulfillment.Service/Fulfillment.Service.csproj" />
     <ProjectReference Include="../../src/Warehouse.Simulator/Warehouse.Simulator.csproj" />
+    <ProjectReference Include="../../src/WarehouseResponse.Service/WarehouseResponse.Service.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio"><PrivateAssets>all</PrivateAssets></PackageReference>
