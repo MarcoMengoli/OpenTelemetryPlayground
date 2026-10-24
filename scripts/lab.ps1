@@ -165,8 +165,8 @@ try {
                 Remove-Item -LiteralPath $probe -Force
             }
             $response = Invoke-WebRequest "http://127.0.0.1:$($PortBase+10)/api/v1/orders" -Method Post -ContentType 'application/json' -Body '{}' -SkipHttpErrorCheck
-            if ($response.StatusCode -ne 501 -or ($response.Content | ConvertFrom-Json).code -ne 'not_implemented') { throw 'Foundation must not pretend checkout works.' }
-            Write-Output 'Foundation verified, including a real RabbitMQ transfer. Ecommerce is not implemented.'
+            if ($response.StatusCode -ne 400 -or ($response.Content | ConvertFrom-Json).code -ne 'invalid_request') { throw 'Checkout must reject an invalid request using the v1 error contract.' }
+            Write-Output 'Laboratory verified, including real RabbitMQ and checkout validation. Complete ecommerce remains covered by its own stories.'
         }
     }
 } finally { Pop-Location }
