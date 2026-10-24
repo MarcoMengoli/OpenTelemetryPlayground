@@ -1,11 +1,13 @@
-# OpenTelemetryPlayground — base US02
+# OpenTelemetryPlayground
 
 Playground didattico locale .NET, **senza instrumentazione OpenTelemetry o Aspire**.
 La US02 avvia sette host applicativi e Warehouse.Simulator, configura Serilog/ILogger<T>,
 SQLite, directory condivise e RabbitMQ. **Il checkout completo non è implementato**.
 Payments.Api implementa le [operazioni simulate e persistenti della US03](docs/payments.md).
-Gli altri endpoint business rispondono `501 not_implemented`, i worker non consumano ancora
-messaggi business e il simulatore non produce ancora spedizioni. La readiness certifica
+Checkout e Orders implementano [accettazione, autorizzazione e invio dei due comandi US04](docs/checkout-orders.md).
+Couriers e Fulfillment implementano [stima e richiesta magazzino persistenti US07](docs/fulfillment.md).
+Inventory e il percorso file magazzino non elaborano ancora il flusso completo e il simulatore
+non produce spedizioni. La readiness certifica
 solo l'infrastruttura di base, non il flusso ecommerce.
 
 ## Prerequisiti e versioni
@@ -33,7 +35,9 @@ dotnet test --no-build -c Release
 Il test RabbitMQ è **skipped** nel comando offline: questo non prova il trasferimento reale.
 Gli altri test verificano tutti gli esempi pubblicati, payload invalidi, isolamento dei nomi
 e persistenza SQLite tra riaperture. I test Payments aggiungono HTTP reale, duplicati
-concorrenti, transizioni e recupero dopo riavvio o perdita della risposta.
+concorrenti, transizioni e recupero dopo riavvio o perdita della risposta. I test Checkout/Orders
+verificano inoltre l'accettazione/outbox atomica e il coordinamento con Payments; le prove
+del percorso RabbitMQ reale sono skipped offline e abilitate da lab verify.
 
 ## Ambiente locale
 
@@ -55,7 +59,9 @@ poi avvia otto host locali e controlla la loro readiness. Fallisce se le porte s
 `verify` abilita il test RabbitMQ reale: publish con confirm/mandatory, consumo con OrderId,
 nack/requeue, redelivery, ack e verifica della coda vuota; verifica anche un messaggio non
 instradabile. Usa exchange e coda unici, rimossi alla fine. Verifica inoltre log di avvio,
-file SQLite, scrittura/lettura delle quattro directory e risposta 501 del checkout.
+file SQLite, scrittura/lettura delle quattro directory e rifiuto 400 degli input Checkout invalidi.
+Le prove US04 creano vhost UUID separati tramite la management API del broker locale e li
+rimuovono al termine, senza consumare le code dei servizi attivi del laboratorio.
 
 | Host | Porta con base 18200 | Base endpoint |
 |---|---:|---|
@@ -101,6 +107,7 @@ comune agli host del solo ambiente scelto. Le variabili corrispondono a `Lab:Nam
 - [Architettura e confini delle story](docs/architecture/README.md)
 - [Contratti HTTP, messaggi e file v1](docs/contracts/README.md)
 - [Payments.Api: operazioni, scenari e verifiche US03](docs/payments.md)
+- [Checkout e Orders: stati, outbox, retry e verifiche US04](docs/checkout-orders.md)
 - [Esiti e limiti delle verifiche US02](docs/architecture/verification-us02.md)
 - [Specifica US02](https://github.com/MarcoMengoli/OpenTelemetryPlayground/issues/2)
 

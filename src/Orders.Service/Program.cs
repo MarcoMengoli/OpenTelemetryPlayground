@@ -1,7 +1,3 @@
-using Playground.Infrastructure;
+using Orders.Service;
 
-var builder = FoundationHost.Create(args, "Orders.Service");
-var app = builder.Build();
-app.MapFoundation("Orders.Service");
-app.MapGet("/internal/v1/orders/{orderId:guid}", () => FoundationHost.NotImplemented());
-await app.RunAsync();
+await OrdersApplication.Build(args).RunAsync();

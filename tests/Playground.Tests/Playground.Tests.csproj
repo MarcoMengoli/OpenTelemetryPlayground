@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Playground.Infrastructure/Playground.Infrastructure.csproj" />
     <ProjectReference Include="../../src/Payments.Api/Payments.Api.csproj" />
+    <ProjectReference Include="../../src/Checkout.Api/Checkout.Api.csproj" />
+    <ProjectReference Include="../../src/Orders.Service/Orders.Service.csproj" />
     <ProjectReference Include="../../src/Couriers.Api/Couriers.Api.csproj" />
     <ProjectReference Include="../../src/Fulfillment.Service/Fulfillment.Service.csproj" />
     <ProjectReference Include="../../src/Warehouse.Simulator/Warehouse.Simulator.csproj" />

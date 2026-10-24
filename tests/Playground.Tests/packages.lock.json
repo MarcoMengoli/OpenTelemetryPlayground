@@ -229,6 +229,12 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "checkout.api": {
+        "type": "Project",
+        "dependencies": {
+          "Playground.Infrastructure": "[1.0.0, )"
+        }
+      },
       "couriers.api": {
         "type": "Project",
         "dependencies": {
@@ -236,6 +242,12 @@
         }
       },
       "fulfillment.service": {
+        "type": "Project",
+        "dependencies": {
+          "Playground.Infrastructure": "[1.0.0, )"
+        }
+      },
+      "orders.service": {
         "type": "Project",
         "dependencies": {
           "Playground.Infrastructure": "[1.0.0, )"
