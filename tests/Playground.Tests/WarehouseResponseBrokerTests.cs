@@ -41,7 +41,7 @@ public sealed class WarehouseResponseBrokerTests
             Assert.True(await pump.SendNextAsync(restartedPublisher, default));
         Assert.Equal(1L, data.Query("SELECT sent FROM outbox"));
 
-        await using (var connection = await Broker.Factory(data.Settings).CreateConnectionAsync())
+        await using (var connection = await Broker.Factory(broker.Settings).CreateConnectionAsync())
         await using (var channel = await connection.CreateChannelAsync())
         {
             var first = await Receive(channel, data.Settings);
@@ -86,9 +86,9 @@ public sealed class WarehouseResponseBrokerTests
         // Explicit operator recovery after correcting the cause, preserving ID and body.
         data.Query("UPDATE outbox SET attempts=0,last_error=NULL WHERE sent=0");
         Assert.Equal(pending, outbox.Next());
-        await using (var recovered = new ConfirmedPublisher(data.Settings))
-            Assert.True(await new OutboxPump(data.Settings, outbox, NullLogger<OutboxPump>.Instance).SendNextAsync(recovered, default));
-        await using (var connection = await Broker.Factory(data.Settings).CreateConnectionAsync())
+        await using (var recovered = new ConfirmedPublisher(broker.Settings))
+            Assert.True(await new OutboxPump(broker.Settings, outbox, NullLogger<OutboxPump>.Instance).SendNextAsync(recovered, default));
+        await using (var connection = await Broker.Factory(broker.Settings).CreateConnectionAsync())
         await using (var channel = await connection.CreateChannelAsync())
         {
             var message = await Receive(channel, data.Settings);
@@ -137,7 +137,14 @@ internal sealed class ResponseBroker(string name) : IAsyncDisposable
         catch { await fixture.DisposeAsync(); throw; }
     }
     public Task Stop() => Docker("stop", "--time", "10", name);
-    public async Task Start() { await Docker("start", name); await Ready(); }
+    public async Task Start()
+    {
+        await Docker("start", name);
+        // Docker may allocate a new host port when a dynamic binding is restarted.
+        var port = await Docker("port", name, "5672/tcp");
+        Settings = Settings with { RabbitPort = int.Parse(port.Trim().Split(':').Last()) };
+        await Ready();
+    }
     private async Task Ready()
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
