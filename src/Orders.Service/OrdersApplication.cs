@@ -18,7 +18,19 @@ public static class OrdersApplication
             client.Timeout = TimeSpan.FromSeconds(5);
         });
         builder.Services.AddSingleton<OrderIntake>();
+        builder.Services.AddHttpClient<PaymentCompletion>(client =>
+        {
+            client.BaseAddress = new Uri(builder.Configuration["Services:PaymentsBaseUrl"] ?? $"http://127.0.0.1:{settings.RabbitPort + 12}");
+            client.Timeout = TimeSpan.FromSeconds(5);
+        });
+        builder.Services.AddHttpClient<ShipmentMapping>(client =>
+        {
+            client.BaseAddress = new Uri(builder.Configuration["Services:FulfillmentBaseUrl"] ?? $"http://127.0.0.1:{settings.RabbitPort + 14}");
+            client.Timeout = TimeSpan.FromSeconds(5);
+        });
+        builder.Services.AddSingleton<ShipmentProcessor>();
         builder.Services.AddHostedService<OrderCreatedConsumer>();
+        builder.Services.AddHostedService<ShipmentConsumer>();
         builder.Services.AddHostedService<OutboxPump>();
         var app = builder.Build();
         app.Services.GetRequiredService<OrdersStore>().Initialize();
