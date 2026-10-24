@@ -50,7 +50,9 @@ limitati. Il budget business è di tre tentativi durevoli, con pause 1/2/4 secon
 operativi, senza inventare un nuovo stato ordine. Se il DB non permette neppure
 di persistere l'acquisizione o il contatore, sono comunque consentiti al massimo
 tre tentativi locali di accesso: l'impossibilità di scrittura è riportata nei log.
-Errori SQL non temporanei, input invalidi o conflitti non vengono ritentati.
+Input invalidi e conflitti non vengono ritentati. Un errore SQL non temporaneo
+interrompe la consegna corrente senza retry; il lavoro eventualmente acquisito
+resta nel registro per diagnosi e ripresa al riavvio entro il budget residuo.
 
 Invalidi ed esauriti ricevono nack senza requeue: exchange `<Name>.errors.v1`,
 routing `inventory.reserve.v1`, coda `<Name>.inventory.reserve.v1.errors`.

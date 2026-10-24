@@ -201,9 +201,12 @@ internal sealed class InventoryBrokerLab(LabSettings settings, HttpClient manage
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         while (Scalar(sql) != expected) await Task.Delay(25, deadline.Token);
     }
-    public Task Idle(long acknowledgements) => QueueState(root => root.GetProperty("messages").GetInt64() == 0 &&
-        root.GetProperty("consumers").GetInt64() == 1 && root.TryGetProperty("message_stats", out var stats) && stats.TryGetProperty("ack", out var ack) && ack.GetInt64() >= acknowledgements);
-    public Task Unacknowledged() => QueueState(root => root.GetProperty("messages_unacknowledged").GetInt64() == 1);
+    // Management statistics arrive asynchronously after queue creation. Missing
+    // measurements mean "not observed yet", never zero messages or a passed check.
+    public Task Idle(long acknowledgements) => QueueState(root => root.TryGetProperty("messages", out var messages) && messages.GetInt64() == 0 &&
+        root.TryGetProperty("consumers", out var consumers) && consumers.GetInt64() == 1 &&
+        root.TryGetProperty("message_stats", out var stats) && stats.TryGetProperty("ack", out var ack) && ack.GetInt64() >= acknowledgements);
+    public Task Unacknowledged() => QueueState(root => root.TryGetProperty("messages_unacknowledged", out var messages) && messages.GetInt64() == 1);
     private async Task QueueState(Func<JsonElement, bool> predicate)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
