@@ -260,6 +260,12 @@
           "Serilog.Sinks.Console": "[6.1.1, )"
         }
       },
+      "warehouse.simulator": {
+        "type": "Project",
+        "dependencies": {
+          "Playground.Infrastructure": "[1.0.0, )"
+        }
+      },
       "Microsoft.Data.Sqlite": {
         "type": "CentralTransitive",
         "requested": "[10.0.13, )",

@@ -12,6 +12,8 @@ builder.Services.AddSingleton(provider =>
 builder.Services.AddSingleton<FulfillmentProcessor>();
 builder.Services.AddSingleton<FulfillmentConsumer>();
 builder.Services.AddHostedService<FulfillmentWorker>();
+builder.Services.AddSingleton<WarehouseRequestWriter>();
+builder.Services.AddHostedService<WarehouseRequestWorker>();
 var app = builder.Build();
 app.Services.GetRequiredService<FulfillmentStore>().Initialize();
 app.MapFoundation("Fulfillment.Service");
