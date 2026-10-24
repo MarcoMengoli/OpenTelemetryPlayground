@@ -5,8 +5,9 @@ La US02 avvia sette host applicativi e Warehouse.Simulator, configura Serilog/IL
 SQLite, directory condivise e RabbitMQ. **Il checkout completo non è implementato**.
 Payments.Api implementa le [operazioni simulate e persistenti della US03](docs/payments.md).
 Checkout e Orders implementano [accettazione, autorizzazione e invio dei due comandi US04](docs/checkout-orders.md).
-Couriers/Fulfillment hanno ancora endpoint `501 not_implemented`; Inventory e magazzino
-non elaborano ancora il percorso completo e il simulatore non produce spedizioni. La readiness certifica
+Couriers e Fulfillment implementano [stima e richiesta magazzino persistenti US07](docs/fulfillment.md).
+Inventory e il percorso file magazzino non elaborano ancora il flusso completo e il simulatore
+non produce spedizioni. La readiness certifica
 solo l'infrastruttura di base, non il flusso ecommerce.
 
 ## Prerequisiti e versioni

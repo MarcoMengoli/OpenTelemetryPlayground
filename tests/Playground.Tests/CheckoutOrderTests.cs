@@ -131,6 +131,7 @@ public sealed class CheckoutOrderTests
         var outbox = new DurableOutbox(data.Settings.Database("Checkout.Api"));
         _ = outbox.StartAttempt(message.MessageId);
         outbox.StartCycle(); // Restart must not erase the fact that a publish was attempted.
+        Assert.Equal(1, data.Scalar("Checkout.Api", "SELECT attempts FROM outbox"));
         using var unavailable = await checkout.Client.GetAsync($"/api/v1/orders/{input.OrderId}");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
         Assert.Equal("temporarily_unavailable", WireJson.Read<ApiError>(await unavailable.Content.ReadAsStringAsync()).Code);
@@ -199,6 +200,10 @@ public sealed class CheckoutOrderTests
         Assert.Equal(3, data.Scalar("Orders.Service", "SELECT auth_attempts FROM orders"));
         var remote = await payments.Snapshot(message.OrderId);
         var restarted = data.NewOrders();
+        Assert.Empty(restarted.StartRecoveryCycle());
+        Assert.Equal(3, data.Scalar("Orders.Service", "SELECT auth_attempts FROM orders"));
+        // An operator opens a new cycle only after correcting the cause.
+        data.Execute("Orders.Service", "UPDATE orders SET auth_attempts = 0, last_error = NULL WHERE status = 'Created' AND authorization_blocked = 0");
         var pending = Assert.Single(restarted.StartRecoveryCycle());
         Assert.True(await OrderTestData.Intake(restarted, payments.Client.BaseAddress!).ProcessAsync(pending, CancellationToken.None));
         Assert.Equal(remote.AuthorizationId, restarted.Get(message.OrderId)!.AuthorizationId);

@@ -152,9 +152,9 @@ public sealed class OrdersStore(LabSettings settings)
         using var connection = Open();
         using var command = connection.CreateCommand();
         // Permanent HTTP/protocol errors are not retried automatically on restart.
-        command.CommandText = "UPDATE orders SET auth_attempts = 0 WHERE status = 'Created' AND authorization_blocked = 0";
+        command.CommandText = "UPDATE orders SET last_error = 'payment_retry_exhausted' WHERE status = 'Created' AND authorization_blocked = 0 AND auth_attempts >= 3";
         command.ExecuteNonQuery();
-        command.CommandText = "SELECT source_json FROM orders WHERE status = 'Created' AND authorization_blocked = 0 ORDER BY rowid";
+        command.CommandText = "SELECT source_json FROM orders WHERE status = 'Created' AND authorization_blocked = 0 AND auth_attempts < 3 ORDER BY rowid";
         using var reader = command.ExecuteReader();
         var pending = new List<OrderCreated>();
         while (reader.Read()) pending.Add(WireJson.Read<OrderCreated>(reader.GetString(0)));

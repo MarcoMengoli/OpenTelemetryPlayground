@@ -42,8 +42,9 @@ public sealed class DurableOutbox(string database)
         command.ExecuteNonQuery();
     }
 
-    // One bounded cycle per process start. Unsent identities and payloads never change.
-    public void StartCycle() => Execute("UPDATE outbox SET attempts = 0 WHERE sent = 0");
+    // A crash can consume the final attempt before recording its error. Restart
+    // preserves that budget; only an explicit operator action starts another one.
+    public void StartCycle() => Execute("UPDATE outbox SET last_error = 'publish_retry_exhausted' WHERE sent = 0 AND attempts >= 3");
 
     public OutboxMessage? Next()
     {

@@ -127,6 +127,10 @@ public sealed class OrderBrokerTests
         restartedStore.Initialize();
         var restartedOutbox = new DurableOutbox(restartedStore.Database);
         restartedOutbox.StartCycle();
+        Assert.Null(restartedOutbox.Next());
+        Assert.Equal(3L, OrderTestData.Query(lab.Settings, "Orders.Service", "SELECT attempts FROM outbox WHERE sent = 0"));
+        OrderTestData.Query(lab.Settings, "Orders.Service", "UPDATE outbox SET attempts = 0, last_error = NULL WHERE sent = 0");
+        restartedOutbox.StartCycle();
         Assert.Equal(second, restartedOutbox.Next());
         Assert.True(await new OutboxPump(lab.Settings, restartedOutbox, NullLogger<OutboxPump>.Instance).SendNextAsync(publisher, CancellationToken.None));
         var fulfillment = await OrderBrokerLab.Receive(channel, lab.Settings.Name + ".fulfillment.fulfill.v1");
@@ -166,6 +170,12 @@ public sealed class OrderBrokerTests
             await checkout.DisposeAsync(); checkout = null;
             await orders.DisposeAsync(); orders = null;
             await payments.DisposeAsync(); payments = null;
+            // Explicit operator recovery, with all writers stopped. A process
+            // restart alone is not permission to reset a durable spent budget.
+            var paused = new OrdersStore(lab.Settings);
+            paused.Initialize();
+            Assert.Empty(paused.StartRecoveryCycle());
+            OrderTestData.Query(lab.Settings, "Orders.Service", "UPDATE orders SET auth_attempts = 0, last_error = NULL WHERE status = 'Created' AND authorization_blocked = 0");
             payments = await PaymentHost.Start(paymentData);
             orders = await lab.Orders(payments.Client.BaseAddress!);
             checkout = await lab.Checkout(orders.Client.BaseAddress!);
@@ -181,6 +191,49 @@ public sealed class OrderBrokerTests
             if (checkout is not null) await checkout.DisposeAsync();
             if (orders is not null) await orders.DisposeAsync();
             if (payments is not null) await payments.DisposeAsync();
+        }
+    }
+
+    [BrokerFact]
+    public async Task Stop_during_HTTP_after_remote_commit_resumes_with_remaining_budget_and_stable_authorization()
+    {
+        await using var lab = await OrderBrokerLab.Create();
+        using var paymentData = new PaymentData();
+        var request = OrderTestData.Request();
+        await using var payments = await PaymentHost.Start(paymentData, new("happy-path", 2000, 0, request.OrderId));
+        OrderTestHost? orders = null;
+        OrderTestHost? checkout = null;
+        try
+        {
+            orders = await lab.Orders(payments.Client.BaseAddress!);
+            checkout = await lab.Checkout(orders.Client.BaseAddress!);
+            using var accepted = await checkout.Client.PostAsJsonAsync("/api/v1/orders", request, WireJson.Options);
+            Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+            using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+            {
+                while (paymentData.Count("SELECT COUNT(*) FROM payments") == 0) await Task.Delay(10, deadline.Token);
+            }
+            var original = await payments.Snapshot(request.OrderId);
+            Assert.Equal(1L, OrderTestData.Query(lab.Settings, "Orders.Service", "SELECT auth_attempts FROM orders"));
+            await checkout.DisposeAsync(); checkout = null;
+            await orders.DisposeAsync(); orders = null;
+            Assert.Equal(0L, OrderTestData.Query(lab.Settings, "Orders.Service", "SELECT COUNT(*) FROM outbox"));
+            Assert.Equal(0L, OrderTestData.Query(lab.Settings, "Orders.Service", "SELECT processed FROM order_inbox"));
+            orders = await lab.Orders(payments.Client.BaseAddress!);
+            checkout = await lab.Checkout(orders.Client.BaseAddress!);
+            var recovered = await lab.Snapshot(checkout, request.OrderId, x => x.Status == OrderStatus.FulfillmentPending);
+            Assert.Equal(original.AuthorizationId, recovered.AuthorizationId);
+            Assert.Equal(2L, OrderTestData.Query(lab.Settings, "Orders.Service", "SELECT auth_attempts FROM orders"));
+            Assert.Equal(1, paymentData.Count("SELECT COUNT(*) FROM payments"));
+            await using var connection = await Broker.Factory(lab.Settings).CreateConnectionAsync();
+            await using var channel = await connection.CreateChannelAsync();
+            _ = await OrderBrokerLab.Receive(channel, lab.Settings.Name + ".inventory.reserve.v1");
+            _ = await OrderBrokerLab.Receive(channel, lab.Settings.Name + ".fulfillment.fulfill.v1");
+        }
+        finally
+        {
+            if (checkout is not null) await checkout.DisposeAsync();
+            if (orders is not null) await orders.DisposeAsync();
         }
     }
 

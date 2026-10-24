@@ -20,7 +20,7 @@ public sealed class OrderCreatedConsumer(LabSettings settings, OrdersStore store
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // A restart is the explicit recovery action for durable pending authorizations.
+        // Resume durable work within its remaining budget; restart never resets it.
         foreach (var message in store.StartRecoveryCycle())
         {
             try { await intake.ProcessAsync(message, stoppingToken); }

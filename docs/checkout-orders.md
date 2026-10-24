@@ -81,16 +81,38 @@ payment_retry_exhausted e ordine ancora Created. HTTP 400/409 e risposte incompa
 bloccano quell'autorizzazione senza retry automatico, neppure al riavvio. Errori
 operativi usano LastError; failureCode resta riservato al rifiuto business.
 
-Dopo correzione di un guasto temporaneo, fermare e riavviare **lo stesso** ambiente
-con lab.ps1 stop/start, stessi Name/PortBase. Il riavvio apre un nuovo ciclo limitato
-per le outbox non inviate e riprende da source_json le autorizzazioni Created non
-bloccate. Anche se il messaggio originale è già nella coda errori, il lavoro locale
-incompleto è conservato. Non rigenera MessageId, payload o autorizzazioni. I messaggi
-già marcati inviati non vengono ripubblicati. Un errore permanente richiede prima
-correggerne la causa e un intervento esplicito sul solo database Orders del laboratorio
-per riabilitare authorization_blocked, poi stop/start; nessun endpoint o retry
-automatico aggiuntivo. Il reset resta un'operazione distinta che elimina i dati del
-solo ambiente scelto.
+Il riavvio dello stesso ambiente (lab.ps1 stop/start, stessi Name/PortBase) conserva
+i contatori già consumati. Riprende le outbox non inviate e le autorizzazioni Created
+non bloccate soltanto entro il budget residuo. Anche un arresto durante l'ultimo
+tentativo consuma quel tentativo: all'avvio il lavoro rimane visibile come esaurito.
+Non rigenera MessageId, payload o autorizzazioni. I messaggi già inviati non vengono
+ripubblicati; una riconsegna già completata viene ackata senza una nuova chiamata.
+
+Per aprire un nuovo ciclo dopo aver corretto la causa, fermare i soli servizi
+dell'ambiente e usare un client SQLite sul **loro** database. Per un'autorizzazione
+Orders (inclusi errori permanenti, soltanto dopo la correzione della causa):
+
+```sql
+BEGIN IMMEDIATE;
+UPDATE orders SET auth_attempts=0, authorization_blocked=0, last_error=NULL
+WHERE order_id='<OrderId verificato>' AND status='Created';
+COMMIT;
+```
+
+Per le pubblicazioni, nel database Checkout oppure Orders proprietario dei record:
+
+```sql
+BEGIN IMMEDIATE;
+UPDATE outbox SET attempts=0, last_error=NULL
+WHERE order_id='<OrderId verificato>' AND sent=0;
+COMMIT;
+```
+
+Riavviare la stessa istanza: source_json permette di riprendere il lavoro locale
+anche se l'originale è nella coda errori. La copia in errore rimane una prova e non
+viene letta automaticamente. Non modificare identificativi, payload o publish_started.
+Nessun endpoint di recupero aggiuntivo; il reset dell'ambiente resta distinto dal
+recupero di un singolo incarico ed elimina i dati del solo ambiente scelto.
 
 La connessione consumer ha tre riconnessioni/fallimenti per processo con pause
 limitate, poi richiede riavvio; l'outbox si ferma dopo tre errori di accesso allo
@@ -125,7 +147,8 @@ handler/store HTTP della US03. Nessun sostituto del broker o del pagamento nelle
 di percorso. Consumer di test osservano i comandi senza attivare Inventory/Fulfillment.
 
 Copertura broker: percorso autorizzato e due comandi, rifiuto senza comandi, duplicati
-di trasporto/logici, mandatory return, stop dopo il primo publish e recupero del
-secondo dopo budget esaurito, timeout HTTP **reale di 5 secondi** dopo l'effetto,
-quarantena e ripresa dal DB dopo riavvio, messaggi invalidi in coda errori. Non è
+di trasporto/logici, mandatory return, riapertura di store/pump dopo il primo publish
+e recupero esplicito del secondo dopo budget esaurito, timeout HTTP **reale di 5 secondi**
+dopo l'effetto, quarantena e ripresa operatore, arresto reale dell'host Orders durante
+HTTP e ripresa dopo riavvio con budget residuo, messaggi invalidi in coda errori. Non è
 ancora la prova US10 con tutti i servizi reali del laboratorio.
