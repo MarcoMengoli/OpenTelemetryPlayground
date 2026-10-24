@@ -2,8 +2,9 @@
 
 Playground didattico locale .NET, **senza instrumentazione OpenTelemetry o Aspire**.
 La US02 avvia sette host applicativi e Warehouse.Simulator, configura Serilog/ILogger<T>,
-SQLite, directory condivise e RabbitMQ. **Il checkout completo non è implementato**:
-gli endpoint business rispondono `501 not_implemented`, i worker non consumano ancora
+SQLite, directory condivise e RabbitMQ. **Il checkout completo non è implementato**.
+Payments.Api implementa le [operazioni simulate e persistenti della US03](docs/payments.md).
+Gli altri endpoint business rispondono `501 not_implemented`, i worker non consumano ancora
 messaggi business e il simulatore non produce ancora spedizioni. La readiness certifica
 solo l'infrastruttura di base, non il flusso ecommerce.
 
@@ -31,7 +32,8 @@ dotnet test --no-build -c Release
 
 Il test RabbitMQ è **skipped** nel comando offline: questo non prova il trasferimento reale.
 Gli altri test verificano tutti gli esempi pubblicati, payload invalidi, isolamento dei nomi
-e persistenza SQLite tra riaperture.
+e persistenza SQLite tra riaperture. I test Payments aggiungono HTTP reale, duplicati
+concorrenti, transizioni e recupero dopo riavvio o perdita della risposta.
 
 ## Ambiente locale
 
@@ -98,6 +100,7 @@ comune agli host del solo ambiente scelto. Le variabili corrispondono a `Lab:Nam
 
 - [Architettura e confini delle story](docs/architecture/README.md)
 - [Contratti HTTP, messaggi e file v1](docs/contracts/README.md)
+- [Payments.Api: operazioni, scenari e verifiche US03](docs/payments.md)
 - [Esiti e limiti delle verifiche US02](docs/architecture/verification-us02.md)
 - [Specifica US02](https://github.com/MarcoMengoli/OpenTelemetryPlayground/issues/2)
 
