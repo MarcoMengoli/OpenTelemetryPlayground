@@ -37,6 +37,8 @@ public sealed class FulfillmentStore(LabSettings settings)
                 attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT);
             CREATE TABLE IF NOT EXISTS fulfillment_inbox (
                 message_id TEXT PRIMARY KEY, order_id TEXT NOT NULL, message_json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS warehouse_request_file_failures (
+                warehouse_reference TEXT PRIMARY KEY, attempts INTEGER NOT NULL, last_error TEXT NOT NULL, retry_after TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS warehouse_file_outbox (
                 warehouse_reference TEXT PRIMARY KEY, payload_json TEXT NOT NULL, sent INTEGER NOT NULL DEFAULT 0);
             """);
@@ -148,7 +150,7 @@ public sealed class FulfillmentStore(LabSettings settings)
         using (var update = Command(db, tx, "UPDATE fulfillment_work SET state='Ready',last_error=NULL WHERE order_id=$id", ("$id", orderId.ToString()))) update.ExecuteNonQuery();
         tx.Commit();
     }
-    // US08 consumes this durable hand-off. No file is published by US07.
+    // The writer marks sent only after atomic publication; pending rows survive a restart.
     public IReadOnlyList<WarehouseOutboxEntry> UnsentFiles()
     {
         using var db = Open();
@@ -158,7 +160,35 @@ public sealed class FulfillmentStore(LabSettings settings)
         while (reader.Read()) results.Add(new(reader.GetString(0), reader.GetString(1)));
         return results;
     }
-    public WarehouseMappingResponse? Lookup(string reference)
+    public bool CanTryFile(string reference)
+    {
+        using var db = Open();
+        using var command = Command(db, null, "SELECT attempts,retry_after FROM warehouse_request_file_failures WHERE warehouse_reference=$ref", ("$ref", reference));
+        using var reader = command.ExecuteReader();
+        return !reader.Read() || (reader.GetInt32(0) < 3 && DateTimeOffset.Parse(reader.GetString(1)) <= DateTimeOffset.UtcNow);
+    }
+    public void MarkFileSent(string reference)
+    {
+        using var db = Open();
+        using var tx = db.BeginTransaction();
+        using (var command = Command(db, tx, "UPDATE warehouse_file_outbox SET sent=1 WHERE warehouse_reference=$ref", ("$ref", reference))) command.ExecuteNonQuery();
+        using (var clear = Command(db, tx, "DELETE FROM warehouse_request_file_failures WHERE warehouse_reference=$ref", ("$ref", reference))) clear.ExecuteNonQuery();
+        tx.Commit();
+    }
+    public void RecordFileFailure(string reference, string error, bool terminal)
+    {
+        using var db = Open();
+        using var tx = db.BeginTransaction(deferred: false);
+        using var read = Command(db, tx, "SELECT attempts FROM warehouse_request_file_failures WHERE warehouse_reference=$ref", ("$ref", reference));
+        var attempts = terminal ? 3 : Math.Min(3, Convert.ToInt32(read.ExecuteScalar()) + 1);
+        using var write = Command(db, tx, """
+            INSERT INTO warehouse_request_file_failures VALUES($ref,$attempts,$error,$after)
+            ON CONFLICT(warehouse_reference) DO UPDATE SET attempts=excluded.attempts,last_error=excluded.last_error,retry_after=excluded.retry_after
+            """, ("$ref", reference), ("$attempts", attempts), ("$error", error),
+            ("$after", DateTimeOffset.UtcNow.AddSeconds(1 << (attempts - 1)).ToString("O")));
+        write.ExecuteNonQuery();
+        tx.Commit();
+    }    public WarehouseMappingResponse? Lookup(string reference)
     {
         using var db = Open();
         using var command = Command(db, null, "SELECT order_id FROM fulfillment_work WHERE warehouse_reference=$reference", ("$reference", reference));
