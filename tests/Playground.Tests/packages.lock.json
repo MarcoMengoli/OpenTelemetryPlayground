@@ -229,6 +229,18 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "couriers.api": {
+        "type": "Project",
+        "dependencies": {
+          "Playground.Infrastructure": "[1.0.0, )"
+        }
+      },
+      "fulfillment.service": {
+        "type": "Project",
+        "dependencies": {
+          "Playground.Infrastructure": "[1.0.0, )"
+        }
+      },
       "payments.api": {
         "type": "Project",
         "dependencies": {
