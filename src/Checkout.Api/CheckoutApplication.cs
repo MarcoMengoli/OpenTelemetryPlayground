@@ -66,6 +66,8 @@ public static class CheckoutApplication
                 {
                     // Once a publish was attempted its outcome can be ambiguous. Never call
                     // that order unforwarded merely because a confirm was not recorded.
+                    // The dispatcher may have started publishing during the HTTP lookup.
+                    local = store.Get(id);
                     return local is { NeverPublished: true } ? Results.Json(local.Snapshot, WireJson.Options)
                         : Error(503, "temporarily_unavailable", "Orders is temporarily unavailable.");
                 }

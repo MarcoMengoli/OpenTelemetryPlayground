@@ -138,6 +138,41 @@ public sealed class CheckoutOrderTests
     }
 
     [Fact]
+    public async Task Checkout_lookup_rechecks_publication_after_Orders_fails_during_the_request()
+    {
+        using var data = new OrderTestData();
+        var lookupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failLookup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var orders = await OrderTestHost.Stub(app => app.MapGet("/internal/v1/orders/{orderId}", async (CancellationToken token) =>
+        {
+            lookupStarted.TrySetResult();
+            await failLookup.Task.WaitAsync(token);
+            return Microsoft.AspNetCore.Http.Results.StatusCode(503);
+        }));
+        await using var checkout = await OrderTestHost.Checkout(data.Settings, orders.Client.BaseAddress!, TimeSpan.FromSeconds(5));
+        var input = OrderTestData.Request();
+        using var accepted = await checkout.Client.PostAsJsonAsync("/api/v1/orders", input, WireJson.Options);
+        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+        var outbox = new DurableOutbox(data.Settings.Database("Checkout.Api"));
+        var message = outbox.Next()!;
+        Assert.True(outbox.Status(input.OrderId).NeverAttempted);
+
+        var lookup = checkout.Client.GetAsync($"/api/v1/orders/{input.OrderId}");
+        try
+        {
+            // Orders has received the request, so Checkout has already read the
+            // initial acceptance. A concurrent dispatcher now starts publishing.
+            await lookupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, outbox.StartAttempt(message.MessageId));
+        }
+        finally { failLookup.TrySetResult(); }
+
+        using var response = await lookup;
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("temporarily_unavailable", WireJson.Read<ApiError>(await response.Content.ReadAsStringAsync()).Code);
+    }
+
+    [Fact]
     public async Task Orders_deduplicate_transport_and_logical_duplicates_and_reject_conflicts()
     {
         using var data = new OrderTestData();
@@ -297,12 +332,12 @@ internal sealed class OrderTestHost(WebApplication app, HttpClient client) : IAs
         routes(app);
         return await Start(app);
     }
-    public static async Task<OrderTestHost> Checkout(LabSettings settings, Uri orders)
+    public static async Task<OrderTestHost> Checkout(LabSettings settings, Uri orders, TimeSpan? timeout = null)
     {
         var builder = Builder();
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton<CheckoutStore>();
-        builder.Services.AddSingleton(new OrdersLookup(new HttpClient { BaseAddress = orders, Timeout = TimeSpan.FromMilliseconds(300) }));
+        builder.Services.AddSingleton(new OrdersLookup(new HttpClient { BaseAddress = orders, Timeout = timeout ?? TimeSpan.FromMilliseconds(300) }));
         var app = builder.Build();
         app.Services.GetRequiredService<CheckoutStore>().Initialize();
         app.MapCheckout();
