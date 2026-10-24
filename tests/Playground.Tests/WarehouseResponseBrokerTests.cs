@@ -53,7 +53,9 @@ public sealed class WarehouseResponseBrokerTests
                 Assert.Equal("ShipmentConfirmation.v1", message.BasicProperties.Type);
                 Assert.Equal("application/json", message.BasicProperties.ContentType);
                 Assert.True(message.BasicProperties.Persistent);
-                Assert.True(message.BasicProperties.Headers is null || message.BasicProperties.Headers.Count == 0);
+                // RabbitMQ can add its own delivery headers; the application must not add diagnostic context.
+                if (message.BasicProperties.Headers is { } headers)
+                    Assert.DoesNotContain(headers.Keys, key => new[] { "traceparent", "tracestate", "baggage", "TraceId", "SpanId" }.Contains(key, StringComparer.OrdinalIgnoreCase));
             }
             data.Put("renamed.json", WireJson.Write(response));
             data.Reader().Scan(data.Now);

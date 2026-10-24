@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -53,6 +54,7 @@ public sealed class ResponseLookup(ResponseStore store, HttpClient client, ILogg
 {
     public async Task ResumePendingAsync(DateTimeOffset now, CancellationToken token)
     {
+        var started = Stopwatch.GetTimestamp();
         foreach (var acquired in store.Pending())
         {
             token.ThrowIfCancellationRequested();
@@ -63,8 +65,9 @@ public sealed class ResponseLookup(ResponseStore store, HttpClient client, ILogg
                 logger.LogError("Lookup budget exhausted for {WarehouseReference}; response remains durable", response.WarehouseReference);
                 continue;
             }
-            if (acquired.RetryAfter > now) continue;
-            var attempt = store.StartAttempt(response.WarehouseReference, now);
+            var attemptTime = now + Stopwatch.GetElapsedTime(started);
+            if (acquired.RetryAfter > attemptTime) continue;
+            var attempt = store.StartAttempt(response.WarehouseReference, attemptTime);
             if (attempt == 0) continue;
             try
             {
@@ -90,7 +93,7 @@ public sealed class ResponseLookup(ResponseStore store, HttpClient client, ILogg
 
             void Fail(string error, bool permanent)
             {
-                store.FailLookup(response.WarehouseReference, attempt, error, permanent, now);
+                store.FailLookup(response.WarehouseReference, attempt, error, permanent, now + Stopwatch.GetElapsedTime(started));
                 logger.LogWarning("Lookup failed for {WarehouseReference}, attempt {Attempt}/3: {Reason}", response.WarehouseReference, attempt, error);
             }
         }

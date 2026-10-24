@@ -128,7 +128,7 @@ public sealed class WarehouseResponseTests
         Assert.Equal("lookup_http_503", data.Store().Get(response.WarehouseReference)!.LastError);
         await host.Lookup(data.Store()).ResumePendingAsync(data.Now, default);
         Assert.Equal(1, host.Calls);
-        await host.Lookup(data.Store()).ResumePendingAsync(data.Now.AddSeconds(1), default);
+        await host.Lookup(data.Store()).ResumePendingAsync(data.Now.AddSeconds(2), default);
         Assert.Equal(2, host.Calls);
         Assert.Equal("Ready", data.Store().Get(response.WarehouseReference)!.State);
         Assert.Equal(1L, data.Query("SELECT COUNT(*) FROM outbox"));
@@ -153,6 +153,21 @@ public sealed class WarehouseResponseTests
         Assert.Equal(0L, data.Query("SELECT COUNT(*) FROM outbox"));
     }
 
+    [Fact]
+    public async Task Real_http_timeout_starts_backoff_after_the_failed_call()
+    {
+        using var data = new ResponseData();
+        var (response, _) = data.KnownResponse();
+        data.Store().Accept(response);
+        await using var host = await ResponseLookupHost.Start(data.Settings, mode: "slow");
+        await host.Lookup(data.Store()).ResumePendingAsync(data.Now, default);
+        var acquired = data.Store().Get(response.WarehouseReference)!;
+        Assert.Equal("lookup_temporarily_unavailable", acquired.LastError);
+        Assert.Equal(1, acquired.Attempts);
+        Assert.True(acquired.RetryAfter >= data.Now.AddSeconds(5.8));
+        await host.Lookup(data.Store()).ResumePendingAsync(data.Now.AddSeconds(5), default);
+        Assert.Equal(1, host.Calls);
+    }
     [Fact]
     public async Task Crash_during_final_lookup_attempt_does_not_reset_budget_on_restart()
     {
@@ -281,6 +296,7 @@ internal sealed class ResponseLookupHost(WebApplication app, HttpClient client) 
         {
             host.Calls++;
             if (host.Calls <= failures) { context.Response.StatusCode = 503; return; }
+            if (mode == "slow") { await Task.Delay(TimeSpan.FromSeconds(6), context.RequestAborted); return; }
             if (mode == "conflict") { context.Response.StatusCode = 409; return; }
             if (mode == "malformed") { await context.Response.WriteAsync("{}"); return; }
             if (mode == "mismatch") { await context.Response.WriteAsync(WireJson.Write(new WarehouseMappingResponse("wrong", Guid.NewGuid()))); return; }
