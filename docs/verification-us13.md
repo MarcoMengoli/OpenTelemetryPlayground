@@ -3,9 +3,8 @@
 ## Scope and revision
 
 US13 extends the integrated baseline `622aa5f` (US12, including US10/US11).
-Branch: `codex/us13-macos-readme`. The initial implementation commit is the commit
-that first adds this record; subsequent execution results are recorded below and
-in the linked PR with their exact SHA. No application service/contract or warehouse
+Branch: `codex/us13-macos-readme`. Initial implementation commit: `a1817e8e3ae4dbd6ea4b43cea4f49ad4fb40763c`.
+Subsequent execution results are recorded below and in the linked PR with their exact SHA. No application service/contract or warehouse
 JSON is changed. Inventory inspection is a read-only mode of the existing test executable.
 
 This is **not a completed macOS runtime certification**. The relevant acceptance
@@ -38,6 +37,30 @@ host inspection (which does not depend on working directory):
 Not executed locally: build, .NET tests, PowerShell parser/process tests, locked
 restore dependency guard, container architecture inspection/pull, all real broker
 and service scenarios. No test counts are inferred from an older commit.
+
+## Hosted CI on the initial implementation
+
+[Run 40213839676](https://github.com/MarcoMengoli/OpenTelemetryPlayground/actions/runs/40213839676)
+for head `a1817e8e3ae4dbd6ea4b43cea4f49ad4fb40763c`:
+
+| Runner | Observed checks |
+| --- | --- |
+| macOS 15.7.9 (24G830), arm64 | Process/safety script passed; locked restore and Release build passed; **114 .NET tests passed, 30 broker tests skipped**, 0 failed |
+| macOS 15.7.9, Intel | Same offline result: **114 passed, 30 skipped**, 0 failed; process script passed |
+| Windows 2025 x64 | Same offline result: **114 passed, 30 skipped**, 0 failed; process script passed; Unix link case not run |
+| Ubuntu 24.04 x64 | Same offline result: **114 passed, 30 skipped**, 0 failed; process script passed |
+
+Exact commands: `./scripts/test-platform.ps1`, `dotnet restore --locked-mode`,
+`dotnet build --no-restore -c Release`, `dotnet test --no-build -c Release`;
+PowerShell, checked-out repository root, SDK 10.0.400. Offline storage tests exercise
+native SQLite on both hosted Mac architectures; no real broker/container or complete
+Mac service journey was executed. These hosted machines are distinct from the local
+26.6.2 Mac. The Ubuntu real-broker job was still running when this entry was written;
+its final result and the later current-run shutdown regression belong to the PR record.
+
+Codex GitHub review completed without findings on `a1817e8`:
+[review receipt](https://github.com/MarcoMengoli/OpenTelemetryPlayground/pull/26#issuecomment-6400458676).
+Later changes require their own stated review status; this receipt does not certify them.
 
 ## Portability checks added
 

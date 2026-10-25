@@ -128,7 +128,17 @@ jobs:
           $examples = [regex]::Matches($guide, '(?s)<!-- delivery-example:start -->\s*```powershell\s*\r?\n(.*?)\r?\n```\s*<!-- delivery-example:end -->')
           if ($examples.Count -ne 2) { throw 'Missing executable delivery examples; walkthrough NOT verified.' }
           foreach ($example in $examples) {
-            try { . ([scriptblock]::Create($example.Groups[1].Value)) }
+            try {
+              . ([scriptblock]::Create($example.Groups[1].Value))
+              if ((Test-Path variable:snapshot) -and (Test-Path -LiteralPath (Join-Path $root 'owner.json'))) {
+                ./scripts/lab.ps1 stop -Name $name -PortBase $portBase
+                ./scripts/lab.ps1 start -Name $name -PortBase $portBase
+                $resumed = Invoke-RestMethod "$checkout/$orderId" -TimeoutSec 5
+                if ($resumed.status -ne 'Completed' -or $resumed.invoiceId -ne $snapshot.invoiceId) {
+                  throw 'Stop/restart did not preserve the completed order and invoice'
+                }
+              }
+            }
             finally {
               # The manual guide intentionally leaves its fresh environment running.
               # Cleanup belongs to this automated CI wrapper only.

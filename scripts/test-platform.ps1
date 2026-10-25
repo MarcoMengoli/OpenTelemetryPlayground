@@ -65,6 +65,13 @@ $p = Start-LabProcess -Executable (Get-Process -Id $PID).Path -Arguments @('-NoP
         Assert ((Get-Content -LiteralPath (Join-Path $root 'stdout.log') -Raw).Contains('child stdout')) 'Detached stdout missing.'
         Assert ((Get-Content -LiteralPath (Join-Path $root 'stderr.log') -Raw).Contains('child stderr')) 'Detached stderr missing.'
     }
+    $hostLog = Join-Path $root 'host.log'
+    [IO.File]::WriteAllText($hostLog, "Host stopped in previous run`n")
+    $offset = (Get-Item -LiteralPath $hostLog).Length
+    [IO.File]::AppendAllText($hostLog, "Host started in current run`n")
+    Must-Refuse { Assert-HostShutdown $hostLog $offset } 'Missing shutdown log for this run'
+    [IO.File]::AppendAllText($hostLog, "Host stopped in current run`n")
+    Assert-HostShutdown $hostLog $offset
     # A copied script root exercises the actual owner/link refusal before Docker.
     $copy = Join-Path $root 'checkout with spaces'
     New-Item -ItemType Directory -Path (Join-Path $copy 'scripts') | Out-Null
@@ -80,7 +87,9 @@ $p = Start-LabProcess -Executable (Get-Process -Id $PID).Path -Arguments @('-NoP
         Must-Refuse { & (Join-Path $copy 'scripts/lab.ps1') stop -Name owned -PortBase 18800 } 'Linked entries'
         Remove-Item -LiteralPath (Join-Path $lab 'run')
     }
-    Write-Output 'PASS: detached process, literal paths/arguments, identity across shells, PID/executable mismatch, owner refusal and Unix link refusal. No real broker/business verification.'
+    Write-Output 'PASS: detached process, literal paths/arguments, identity across shells, PID/executable mismatch, owner refusal and current-run shutdown log. No real broker/business verification.'
+    if ($IsWindows) { Write-Output 'NOT RUN: symbolic-link refusal on Windows (requires additional privileges).' }
+    else { Write-Output 'PASS: Unix symbolic-link refusal.' }
 } finally {
     # Only the process created by this test; never search or kill by process name.
     if ($null -ne $child) {

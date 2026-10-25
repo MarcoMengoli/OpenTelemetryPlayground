@@ -68,3 +68,16 @@ function Start-LabProcess([string]$Executable, [string[]]$Arguments, [string]$Wo
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Runner executable identity unavailable; inspect PID $($process.Id) and $ErrorPath."
 }
+
+function Assert-HostShutdown([string]$LogPath, [long]$StartOffset = 0) {
+    # Appended logs from an earlier run must not certify this run's shutdown.
+    $stream = [IO.File]::Open($LogPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+        if ($stream.Length -lt $StartOffset) { throw "Host log was truncated: $LogPath" }
+        $null = $stream.Seek($StartOffset, [IO.SeekOrigin]::Begin)
+        $reader = [IO.StreamReader]::new($stream)
+        try {
+            if (!$reader.ReadToEnd().Contains('Host stopped')) { throw "Missing shutdown log for this run: $LogPath" }
+        } finally { $reader.Dispose() }
+    } finally { $stream.Dispose() }
+}

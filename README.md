@@ -87,9 +87,9 @@ use **18900**. Worktrees still need different port ranges. Consult the
 | Platform | Intended configuration | Verification status |
 | --- | --- | --- |
 | Linux | .NET + PowerShell; Docker Linux engine | Existing Ubuntu CI runs real broker, all hosts, E2E and recovery tests; current PR status is authoritative |
-| Windows | .NET + PowerShell 7; Docker in Linux-container mode | Offline regression CI added; full runtime not executed for US13 |
-| macOS Apple Silicon | Native arm64 .NET/PowerShell; Linux arm64 Docker engine | Local host identified as 26.6.2 (25G83), arm64; full runtime blocked by missing prerequisites |
-| macOS Intel | Native x64 .NET/PowerShell; Linux amd64 Docker engine | Separate offline CI target; full runtime not verified |
+| Windows | .NET + PowerShell 7; Docker in Linux-container mode | Offline CI passed (114 tests, 30 broker skips); full runtime not executed for US13 |
+| macOS Apple Silicon | Native arm64 .NET/PowerShell; Linux arm64 Docker engine | Hosted macOS 15.7.9 arm64 offline CI passed (114 tests, 30 broker skips); local 26.6.2 full runtime blocked by missing prerequisites |
+| macOS Intel | Native x64 .NET/PowerShell; Linux amd64 Docker engine | Hosted macOS 15.7.9 Intel offline CI passed (114 tests, 30 broker skips); full runtime not verified |
 
 Required on every platform:
 

@@ -58,7 +58,8 @@ function Stop-Hosts {
         Set-Content -LiteralPath (Join-Path $labRoot "run/$($entry.service).stop") -Value stop
         if (!$process.WaitForExit(15000)) { throw "Host $($entry.service) did not stop gracefully; inspect its log. No unrelated process was killed." }
         $logPath = Join-Path $labRoot "logs/$($entry.service).log"
-        if (!(Select-String -LiteralPath $logPath -SimpleMatch "Host stopped")) { throw "Missing shutdown log for $($entry.service); inspect host output." }
+        $offset = if ($entry.PSObject.Properties['logOffset']) { [long]$entry.logOffset } else { 0 }
+        Assert-HostShutdown $logPath $offset
     }
     Remove-Item -LiteralPath $manifestPath
 }
@@ -110,6 +111,7 @@ try {
                     $runner = Join-Path $PSScriptRoot 'run-host.ps1'
                     $logPath = Join-Path $labRoot "logs/$service.log"
                     $errorLogPath = Join-Path $labRoot "logs/$service.err.log"
+                    $logOffset = if (Test-Path -LiteralPath $logPath) { (Get-Item -LiteralPath $logPath).Length } else { 0 }
                     # Optional US10 scenario is scoped to this child process only.
                     $savedProfile = [Environment]::GetEnvironmentVariable('Simulation__Profile')
                     $savedOrder = [Environment]::GetEnvironmentVariable('Simulation__OrderId')
@@ -131,7 +133,7 @@ try {
                         else { $env:Simulation__OrderId = $savedOrder }
                     }
                     $process = Get-Process -Id $process.Id
-                    $processes += @{ pid=$process.Id; service=$service; identity=(Get-ProcessIdentity $process); executable=$process.Path }
+                    $processes += @{ pid=$process.Id; service=$service; identity=(Get-ProcessIdentity $process); executable=$process.Path; logOffset=$logOffset }
                     Save-Processes $processes
                 }
                 $deadline = [DateTime]::UtcNow.AddSeconds(60)
