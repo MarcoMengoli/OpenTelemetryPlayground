@@ -22,6 +22,32 @@ jobs:
       - name: Test architectural guard
         run: python3 -B -m unittest discover -s .github/tests -v
 
+  portability:
+    name: Offline portability (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Process identity, paths with spaces and safety regressions (no broker)
+        shell: pwsh
+        run: ./scripts/test-platform.ps1
+      - name: Restore, build and offline tests (not full macOS runtime validation)
+        shell: pwsh
+        run: |
+          dotnet restore --locked-mode
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed' }
+          dotnet build --no-restore -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          dotnet test --no-build -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed' }
+
   foundation:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -102,5 +128,13 @@ jobs:
           $examples = [regex]::Matches($guide, '(?s)<!-- delivery-example:start -->\s*```powershell\s*\r?\n(.*?)\r?\n```\s*<!-- delivery-example:end -->')
           if ($examples.Count -ne 2) { throw 'Missing executable delivery examples; walkthrough NOT verified.' }
           foreach ($example in $examples) {
-            & ([scriptblock]::Create($example.Groups[1].Value))
+            try { . ([scriptblock]::Create($example.Groups[1].Value)) }
+            finally {
+              # The manual guide intentionally leaves its fresh environment running.
+              # Cleanup belongs to this automated CI wrapper only.
+              if ((Test-Path variable:root) -and (Test-Path -LiteralPath (Join-Path $root 'owner.json'))) {
+                try { ./scripts/lab.ps1 stop -Name $name -PortBase $portBase }
+                finally { ./scripts/lab.ps1 reset -Name $name -PortBase $portBase }
+              }
+            }
           }

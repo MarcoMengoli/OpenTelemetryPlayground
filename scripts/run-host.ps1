@@ -6,10 +6,10 @@ param(
     [Parameter(Mandatory)][string]$ErrorLogPath
 )
 $ErrorActionPreference = 'Stop'
-$writer = [IO.StreamWriter]::new($LogPath, $false, [Text.UTF8Encoding]::new($false))
+$writer = [IO.StreamWriter]::new($LogPath, $true, [Text.UTF8Encoding]::new($false))
 $writer.AutoFlush = $true
 try {
-    & dotnet $Dll 2> $ErrorLogPath | ForEach-Object { $writer.WriteLine($_) }
+    & dotnet $Dll 2>> $ErrorLogPath | ForEach-Object { $writer.WriteLine($_) }
     $hostExitCode = $LASTEXITCODE
 } finally { $writer.Dispose() }
 exit $hostExitCode

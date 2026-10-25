@@ -96,3 +96,14 @@ soluzione compilabile, ambiente avviabile, logging, contratti, test base, pipeli
 backlog allineati. US10/US11 richiedono i due percorsi integrati; US12 entrambe le
 verifiche. Le sostituzioni conformi ai contratti sono ammesse nei test di percorso,
 non nella prova finale. Review/CI e chiusura issue seguono la skill.
+
+## Comandi di portabilità US13
+
+Dalla radice, in zsh o PowerShell 7: `pwsh -NoProfile -File ./scripts/test-platform.ps1`.
+È una regressione offline dei processi reali (persistenza dopo uscita del launcher,
+identità fra shell, argomenti/percorsi con spazi e rifiuti owner/link); non richiede
+Docker né lo SDK e non certifica il flusso ecommerce. La matrice CI aggiunge questa
+prova e restore/build/test offline su Windows, Linux e macOS (arm64/Intel), mantenendo
+la suite con broker reale su Ubuntu. Stato e limiti: [evidenze US13](../verification-us13.md).
+La guida getting-started manuale lascia il laboratorio acceso: stop/reset automatici
+appartengono soltanto al wrapper CI, non al blocco copiato dall'utente.

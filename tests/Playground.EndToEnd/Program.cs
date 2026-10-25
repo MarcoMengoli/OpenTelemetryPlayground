@@ -11,6 +11,10 @@ using Playground.Infrastructure;
 try
 {
     var configuration = new ConfigurationBuilder().AddEnvironmentVariables().AddCommandLine(args).Build();
+    if (configuration["E2E:InventoryOrderId"] is { } inventoryOrder) {
+        await InventoryInspection.PrintAsync(configuration, Guid.Parse(inventoryOrder));
+        return 0;
+    }
     await using var verification = new EcommerceVerification(configuration);
     await verification.RunAsync();
     return 0;
@@ -246,4 +250,40 @@ sealed class EcommerceVerification : IAsyncDisposable
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private void SetPhase(string value) { phase = value; Console.WriteLine("E2E: " + value); }
     public ValueTask DisposeAsync() { http.Dispose(); management.Dispose(); deadline.Dispose(); return ValueTask.CompletedTask; }
+}
+
+// Read-only manual inspection, using the same SQLite runtime as the verifier.
+// This creates no orders and does not stop/reset a laboratory.
+static class InventoryInspection
+{
+    public static async Task PrintAsync(IConfiguration configuration, Guid orderId)
+    {
+        if (orderId == Guid.Empty || configuration["Lab:Root"] is not { } root)
+            throw new ArgumentException("Supply a nonempty E2E:InventoryOrderId and Lab:Root.");
+        var database = Path.Combine(Path.GetFullPath(root), "data", "Inventory.Service", "state.db");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        while (true)
+        {
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder {
+                DataSource = database, Mode = SqliteOpenMode.ReadOnly, Pooling = false, DefaultTimeout = 5
+            }.ToString());
+            await db.OpenAsync(timeout.Token);
+            await using var completed = db.CreateCommand();
+            completed.CommandText = "SELECT completed FROM inventory_work WHERE order_id=$order";
+            completed.Parameters.AddWithValue("$order", orderId.ToString());
+            if (Convert.ToInt64(await completed.ExecuteScalarAsync(timeout.Token)) == 1)
+            {
+                await using var rows = db.CreateCommand();
+                rows.CommandText = "SELECT sku,quantity FROM inventory_reservations WHERE order_id=$order ORDER BY sku";
+                rows.Parameters.AddWithValue("$order", orderId.ToString());
+                await using var reader = await rows.ExecuteReaderAsync(timeout.Token);
+                var reservations = new List<object>();
+                while (await reader.ReadAsync(timeout.Token))
+                    reservations.Add(new { sku = reader.GetString(0), quantity = reader.GetInt64(1) });
+                Console.WriteLine(JsonSerializer.Serialize(new { orderId, completed = true, reservations }));
+                return;
+            }
+            await Task.Delay(200, timeout.Token);
+        }
+    }
 }

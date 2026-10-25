@@ -8,7 +8,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-if (!$IsWindows -and !$IsLinux) { throw "This script supports Windows and Linux." }
+. (Join-Path $PSScriptRoot 'lab-platform.ps1')
 if ($null -ne $DeclinedOrderId -and ($Action -ne 'start' -or $DeclinedOrderId -eq [guid]::Empty)) { throw 'DeclinedOrderId requires start and a nonempty UUID.' }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $localRoot = Join-Path $repo '.local'
@@ -16,6 +16,11 @@ $labRoot = [IO.Path]::GetFullPath((Join-Path $localRoot $Name))
 # Refuse symlink/junction traversal before any mutation or recursive deletion.
 foreach ($path in @($localRoot, $labRoot)) {
     if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Linked lab path is not allowed: $path" }
+}
+# Refuse linked descendants before stop-file writes, log creation or reset.
+if (Test-Path -LiteralPath $labRoot) {
+    $links = Get-ChildItem -LiteralPath $labRoot -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }
+    if ($links) { throw 'Linked entries inside the environment are not allowed.' }
 }
 $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($repo.ToLowerInvariant()))).Substring(0,10).ToLowerInvariant()
 $project = "otelplay-$Name-$hash"
@@ -42,16 +47,6 @@ function Assert-Owner {
     if ($owner.repo -ne $repo -or $owner.project -ne $project -or $owner.portBase -ne $PortBase) { throw 'Environment ownership/port mismatch. Use the original Name and PortBase.' }
 }
 function Save-Processes($processes) { ConvertTo-Json -InputObject @($processes) -Depth 5 | Set-Content -LiteralPath $manifestPath }
-function Get-ProcessIdentity($process) {
-    if ($IsLinux) {
-        # /proc field 22 is the immutable kernel start tick. DateTime StartTime can vary
-        # across .NET processes because Unix boot time is converted to wall-clock time.
-        $stat = Get-Content -LiteralPath "/proc/$($process.Id)/stat" -Raw
-        $fields = $stat.Substring($stat.LastIndexOf(')') + 2).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
-        return "linux:$($fields[19])"
-    }
-    return "windows:$($process.StartTime.ToUniversalTime().Ticks)"
-}
 function Stop-Hosts {
     if (!(Test-Path -LiteralPath $manifestPath)) { return }
     $processes = @(Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json)
@@ -59,7 +54,7 @@ function Stop-Hosts {
         $process = Get-Process -Id $entry.pid -ErrorAction SilentlyContinue
         if (!$process) { continue }
         # A recycled PID must never target another application's process.
-        if ((Get-ProcessIdentity $process) -ne $entry.identity -or $process.Path -ne $entry.executable) { throw "PID ownership mismatch for $($entry.service); refusing to stop it." }
+        Assert-ProcessIdentity $process $entry
         Set-Content -LiteralPath (Join-Path $labRoot "run/$($entry.service).stop") -Value stop
         if (!$process.WaitForExit(15000)) { throw "Host $($entry.service) did not stop gracefully; inspect its log. No unrelated process was killed." }
         $logPath = Join-Path $labRoot "logs/$($entry.service).log"
@@ -78,6 +73,7 @@ Push-Location $repo
 try {
     switch ($Action) {
         'start' {
+            Assert-LabPrerequisites $repo
             if (Test-Path -LiteralPath $ownerPath) { Assert-Owner }
             if (Test-Path -LiteralPath $manifestPath) { throw 'Saved processes exist. Use ready or stop before starting again.' }
             foreach ($service in $services) {
@@ -89,7 +85,8 @@ try {
                 foreach ($port in @($PortBase, ($PortBase + 1)) + @(10..17 | ForEach-Object { $PortBase + $_ })) {
                     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
                     $listener.Server.ExclusiveAddressUse = $true
-                    $listener.Start(); $listeners += $listener
+                    try { $listener.Start(); $listeners += $listener }
+                    catch { $listener.Stop(); throw "Port $port is unavailable. Choose a free Name/PortBase pair; do not stop another lab. $($_.Exception.Message)" }
                 }
             } finally { foreach ($listener in $listeners) { $listener.Stop() } }
             New-Item -ItemType Directory -Force $labRoot, (Join-Path $labRoot 'logs'), (Join-Path $labRoot 'run') | Out-Null
@@ -113,10 +110,6 @@ try {
                     $runner = Join-Path $PSScriptRoot 'run-host.ps1'
                     $logPath = Join-Path $labRoot "logs/$service.log"
                     $errorLogPath = Join-Path $labRoot "logs/$service.err.log"
-                    $options = @{ FilePath=(Get-Command pwsh).Source;
-                        ArgumentList=@('-NoProfile', '-File', "`"$runner`"", '-Dll', "`"$dll`"", '-LogPath', "`"$logPath`"", '-ErrorLogPath', "`"$errorLogPath`"");
-                        WorkingDirectory=$repo; PassThru=$true }
-                    if ($IsWindows) { $options.WindowStyle = 'Hidden' }
                     # Optional US10 scenario is scoped to this child process only.
                     $savedProfile = [Environment]::GetEnvironmentVariable('Simulation__Profile')
                     $savedOrder = [Environment]::GetEnvironmentVariable('Simulation__OrderId')
@@ -125,7 +118,10 @@ try {
                             $env:Simulation__Profile = 'payment-declined'
                             $env:Simulation__OrderId = $DeclinedOrderId.ToString()
                         }
-                        $process = Start-Process @options
+                        $process = Start-LabProcess -Executable (Get-Process -Id $PID).Path `
+                            -Arguments @('-NoProfile', '-File', $runner, '-Dll', $dll, '-LogPath', $logPath, '-ErrorLogPath', $errorLogPath) `
+                            -WorkingDirectory $repo -OutputPath (Join-Path $labRoot "logs/$service.runner.log") `
+                            -ErrorPath (Join-Path $labRoot "logs/$service.runner.err.log")
                     } finally {
                         # PowerShell can coerce $null to an empty string for this
                         # .NET call; an absent setting must remain absent.
