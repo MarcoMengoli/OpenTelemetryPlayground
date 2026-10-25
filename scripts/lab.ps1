@@ -3,11 +3,13 @@
 param(
     [Parameter(Mandatory, Position=0)][ValidateSet('start','ready','stop','reset','verify')][string]$Action,
     [ValidatePattern('^[a-z][a-z0-9-]{0,31}$')][string]$Name = 'local',
-    [ValidateRange(1024,65518)][int]$PortBase = 18200
+    [ValidateRange(1024,65518)][int]$PortBase = 18200,
+    [Nullable[guid]]$DeclinedOrderId
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if (!$IsWindows -and !$IsLinux) { throw "This script supports Windows and Linux." }
+if ($null -ne $DeclinedOrderId -and ($Action -ne 'start' -or $DeclinedOrderId -eq [guid]::Empty)) { throw 'DeclinedOrderId requires start and a nonempty UUID.' }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $localRoot = Join-Path $repo '.local'
 $labRoot = [IO.Path]::GetFullPath((Join-Path $localRoot $Name))
@@ -115,7 +117,19 @@ try {
                         ArgumentList=@('-NoProfile', '-File', "`"$runner`"", '-Dll', "`"$dll`"", '-LogPath', "`"$logPath`"", '-ErrorLogPath', "`"$errorLogPath`"");
                         WorkingDirectory=$repo; PassThru=$true }
                     if ($IsWindows) { $options.WindowStyle = 'Hidden' }
-                    $process = Start-Process @options
+                    # Optional US10 scenario is scoped to this child process only.
+                    $savedProfile = [Environment]::GetEnvironmentVariable('Simulation__Profile')
+                    $savedOrder = [Environment]::GetEnvironmentVariable('Simulation__OrderId')
+                    try {
+                        if ($service -eq 'Payments.Api' -and $null -ne $DeclinedOrderId) {
+                            $env:Simulation__Profile = 'payment-declined'
+                            $env:Simulation__OrderId = $DeclinedOrderId.ToString()
+                        }
+                        $process = Start-Process @options
+                    } finally {
+                        [Environment]::SetEnvironmentVariable('Simulation__Profile', $savedProfile)
+                        [Environment]::SetEnvironmentVariable('Simulation__OrderId', $savedOrder)
+                    }
                     $process = Get-Process -Id $process.Id
                     $processes += @{ pid=$process.Id; service=$service; identity=(Get-ProcessIdentity $process); executable=$process.Path }
                     Save-Processes $processes
