@@ -6,7 +6,7 @@ namespace Orders.Service;
 
 public sealed class OrderMessageConflictException : Exception;
 
-public sealed class OrdersStore(LabSettings settings)
+public sealed partial class OrdersStore(LabSettings settings)
 {
     public string Database => settings.Database("Orders.Service");
     public void Initialize()
@@ -35,6 +35,7 @@ public sealed class OrdersStore(LabSettings settings)
             """;
         command.ExecuteNonQuery();
         DurableOutbox.Initialize(connection);
+        InitializeCompletion(connection);
     }
 
     // Inbox receipt + Created work are durable before HTTP. Only processed=1 is a
@@ -136,7 +137,10 @@ public sealed class OrdersStore(LabSettings settings)
     {
         using var connection = Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT status, failure_code, last_error, authorization_id FROM orders WHERE order_id = $order";
+        command.CommandText = """
+            SELECT o.status, o.failure_code, o.last_error, o.authorization_id, s.shipment_id, s.capture_id, s.invoice_id
+            FROM orders o LEFT JOIN shipment_work s ON s.order_id = o.order_id WHERE o.order_id = $order
+            """;
         command.Parameters.AddWithValue("$order", orderId.ToString());
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return null;
@@ -144,7 +148,10 @@ public sealed class OrdersStore(LabSettings settings)
         var failure = reader.IsDBNull(1) ? null : reader.GetString(1);
         var error = reader.IsDBNull(2) ? null : reader.GetString(2);
         Guid? authorization = reader.IsDBNull(3) ? null : Guid.Parse(reader.GetString(3));
-        return new(orderId, status, failure, error ?? new DurableOutbox(Database).Status(orderId).LastError, authorization, null, null, null);
+        return new(orderId, status, failure, status == OrderStatus.Completed ? null : error ?? new DurableOutbox(Database).Status(orderId).LastError,
+            authorization, Id(4), Id(5), Id(6));
+
+        Guid? Id(int index) => reader.IsDBNull(index) ? null : Guid.Parse(reader.GetString(index));
     }
 
     public IReadOnlyList<OrderCreated> StartRecoveryCycle()
