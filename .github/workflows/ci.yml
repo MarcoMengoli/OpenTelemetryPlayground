@@ -95,3 +95,12 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+      - name: Execute documented delivery walkthroughs
+        shell: pwsh
+        run: |
+          $guide = Get-Content docs/getting-started.md -Raw
+          $examples = [regex]::Matches($guide, '(?s)<!-- delivery-example:start -->\s*```powershell\s*\r?\n(.*?)\r?\n```\s*<!-- delivery-example:end -->')
+          if ($examples.Count -ne 2) { throw 'Missing executable delivery examples; walkthrough NOT verified.' }
+          foreach ($example in $examples) {
+            & ([scriptblock]::Create($example.Groups[1].Value))
+          }

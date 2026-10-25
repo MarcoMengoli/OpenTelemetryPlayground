@@ -1,30 +1,32 @@
 # OpenTelemetryPlayground
 
-Playground didattico locale .NET, **senza instrumentazione OpenTelemetry o Aspire**.
-La US02 avvia sette host applicativi e Warehouse.Simulator, configura Serilog/ILogger<T>,
-SQLite, directory condivise e RabbitMQ. **Il checkout completo non è implementato**.
-Payments.Api implementa le [operazioni simulate e persistenti della US03](docs/payments.md).
-Checkout e Orders implementano [accettazione, autorizzazione e invio dei due comandi US04](docs/checkout-orders.md).
-Couriers e Fulfillment implementano [stima e richiesta magazzino persistenti US07](docs/fulfillment.md).
-Inventory e il percorso file magazzino non elaborano ancora il flusso completo e il simulatore
-non produce spedizioni. La readiness certifica
-solo l'infrastruttura di base, non il flusso ecommerce.
+Playground ecommerce locale .NET da esplorare **prima di aggiungere OpenTelemetry**.
+Il percorso completo è implementato: checkout, autorizzazione, prenotazione Inventory
+ed evasione in parallelo, file magazzino, spedizione, addebito e fattura simulata.
+Persistenza SQLite per servizio, idempotenza, outbox e retry limitati sono inclusi.
+Nessuna UI, instrumentazione applicativa OTel, exporter, Collector o dipendenza Aspire.
+I log essenziali usano `ILogger<T>` e Serilog console; la diagnostica interna del
+runtime e delle librerie rimane invariata.
 
-## Prerequisiti e versioni
+Baseline applicativa integrata e verificata:
+[`c9f2a065716c657130533225e42ccc0a721454b0`](https://github.com/MarcoMengoli/OpenTelemetryPlayground/commit/c9f2a065716c657130533225e42ccc0a721454b0),
+con US10 e US11. [Riferimenti, risultati e limiti della consegna](docs/delivery.md).
 
-- .NET SDK **10.0.400** esatto (`global.json`), target `net10.0`.
-- PowerShell 7.2+ (`pwsh`) per gli script, su Windows/Linux.
-- Docker con daemon Linux funzionante e Docker Compose v2.
-- Porte libere: base e base+1 per RabbitMQ, base+10..17 per gli host.
-- Nessun account cloud. Il primo restore/pull richiede accesso a NuGet/Docker Hub.
+## Prerequisiti
 
-.NET 10 è LTS: [support policy ufficiale](https://dotnet.microsoft.com/en-us/platform/support/policy).
-Pacchetti con versioni esatte in `Directory.Packages.props` e dipendenze transitive bloccate
-nei `packages.lock.json`. L'immagine RabbitMQ è `rabbitmq:4.1.4-management`.
-La patch Microsoft.Data.Sqlite 10.0.13 evita la dipendenza nativa vulnerabile trovata con 10.0.0.
-Aggiornamenti SDK/pacchetti/immagini devono essere espliciti e rieseguire le verifiche.
+- Windows o Linux, .NET SDK **10.0.400** esatto (`global.json`), target `net10.0`.
+- PowerShell **7.2+** (`pwsh`), Docker con daemon Linux funzionante e Compose v2.
+- Porte loopback libere: base/base+1 per AMQP/management, base+10..17 per gli otto host.
+- Accesso a NuGet e Docker Hub per il primo restore/pull; nessun account cloud richiesto.
 
-## Build e test da checkout pulito
+Gli script di laboratorio supportano Windows/Linux. Build e test offline su macOS
+non certificano l'avvio o le prove broker. Versioni in `Directory.Packages.props`,
+lock transitive in `packages.lock.json`, immagine `rabbitmq:4.1.4-management`
+in `infra/compose.yaml`: non occorre aggiornarle per iniziare.
+
+## Da checkout pulito
+
+Dalla radice del repository, in PowerShell:
 
 ```powershell
 dotnet restore --locked-mode
@@ -32,85 +34,78 @@ dotnet build --no-restore -c Release
 dotnet test --no-build -c Release
 ```
 
-Il test RabbitMQ è **skipped** nel comando offline: questo non prova il trasferimento reale.
-Gli altri test verificano tutti gli esempi pubblicati, payload invalidi, isolamento dei nomi
-e persistenza SQLite tra riaperture. I test Payments aggiungono HTTP reale, duplicati
-concorrenti, transizioni e recupero dopo riavvio o perdita della risposta. I test Checkout/Orders
-verificano inoltre l'accettazione/outbox atomica e il coordinamento con Payments; le prove
-del percorso RabbitMQ reale sono skipped offline e abilitate da lab verify.
-
-## Ambiente locale
-
-Eseguire dalla radice del repository, con una coppia nome/porte riservata al proprio lavoro:
+Un test broker **skipped** nel comando offline è non verificato. Per provare subito
+normale e rifiuto, due volte con tutti i servizi reali e reset isolato:
 
 ```powershell
-pwsh ./scripts/lab.ps1 start  -Name us02-b -PortBase 18200
-pwsh ./scripts/lab.ps1 ready  -Name us02-b -PortBase 18200
-pwsh ./scripts/lab.ps1 verify -Name us02-b -PortBase 18200
-pwsh ./scripts/lab.ps1 stop   -Name us02-b -PortBase 18200
-# Riparte conservando database e volume RabbitMQ:
-pwsh ./scripts/lab.ps1 start  -Name us02-b -PortBase 18200
-# Distruttivo SOLO per questo ambiente: ferma, rimuove il suo volume e .local/us02-b:
-pwsh ./scripts/lab.ps1 reset  -Name us02-b -PortBase 18200
+pwsh ./scripts/e2e.ps1 -Name explore-a -PortBase 18500 -NoBuild
 ```
 
-`start` richiede la build Release già eseguita. Avvia Compose, attende la salute del broker,
-poi avvia otto host locali e controlla la loro readiness. Fallisce se le porte sono occupate.
-`verify` abilita il test RabbitMQ reale: publish con confirm/mandatory, consumo con OrderId,
-nack/requeue, redelivery, ack e verifica della coda vuota; verifica anche un messaggio non
-instradabile. Usa exchange e coda unici, rimossi alla fine. Verifica inoltre log di avvio,
-file SQLite, scrittura/lettura delle quattro directory e rifiuto 400 degli input Checkout invalidi.
-Le prove US04 creano vhost UUID separati tramite la management API del broker locale e li
-rimuovono al termine, senza consumare le code dei servizi attivi del laboratorio.
+Il comando richiede namespace nuovi, controlla Completed/InvoiceId, aspetta Inventory
+separatamente, riconcilia magazzino e verifica l'assenza di evasione per il rifiuto.
+Conserva report, log, database e file in `.local/e2e-evidence/`. Prerequisiti assenti,
+timeout o cleanup fallito producono errore. [Dettagli US10](docs/end-to-end.md).
 
-| Host | Porta con base 18200 | Base endpoint |
-|---|---:|---|
-| Checkout.Api | 18210 | `/health/ready` |
-| Orders.Service | 18211 | `/health/ready` |
-| Payments.Api | 18212 | `/health/ready` |
-| Inventory.Service | 18213 | `/health/ready` |
-| Fulfillment.Service | 18214 | `/health/ready` |
-| Couriers.Api | 18215 | `/health/ready` |
-| WarehouseResponse.Service | 18216 | `/health/ready` |
-| Warehouse.Simulator | 18217 | `/health/ready` |
+Per creare e seguire personalmente un ordine via HTTP usare la
+[guida copiabile fino alla fattura](docs/getting-started.md). Include un esempio
+reale di guasto e ripristino; la CI esegue gli stessi blocchi della guida.
 
-RabbitMQ AMQP è su `127.0.0.1:18200`; management su `http://127.0.0.1:18201`.
-Credenziali locali pubbliche: `playground` / `local-playground-only`. Porte bindate solo al
-loopback: queste credenziali non sono destinate a un deployment condiviso o in produzione.
+## Avvio, arresto e reset manuali
 
-## Isolamento, dati e log
+Scegliere una coppia nome/porte libera, diversa da altri lavori:
 
-- Il progetto Compose è `otelplay-<Name>-<hash-del-worktree>`; il volume è scoped al progetto.
-- Il vhost è `<Name>`, exchange e code sono prefissati da `<Name>`; i test aggiungono un UUID.
-- Database: `.local/<Name>/data/<Service>/state.db`, uno per host.
+```powershell
+pwsh ./scripts/lab.ps1 start  -Name explore-manual -PortBase 18900
+pwsh ./scripts/lab.ps1 ready  -Name explore-manual -PortBase 18900
+pwsh ./scripts/lab.ps1 verify -Name explore-manual -PortBase 18900
+pwsh ./scripts/lab.ps1 stop   -Name explore-manual -PortBase 18900
+# Riparte conservando dati e volume:
+pwsh ./scripts/lab.ps1 start  -Name explore-manual -PortBase 18900
+# Rimuove soltanto dati, processi e volume di questo ambiente:
+pwsh ./scripts/lab.ps1 reset  -Name explore-manual -PortBase 18900
+```
+
+`start` richiede build Release, avvia broker e otto processi e attende readiness.
+Readiness attesta infrastruttura disponibile, non un ordine completato. `verify`
+abilita tutte le prove RabbitMQ, comprese quelle US11, e i controlli infrastrutturali;
+E2E US10 verifica esplicitamente il percorso normale/rifiuto.
+[Catalogo US11 con azioni, attese e recupero](docs/failure-scenarios.md).
+
+## Configurazione, dati e diagnosi
+
+`lab.ps1` configura nome, root assoluta, porte e credenziali locali. Per avvio con
+debugger: [variabili di esempio](infra/lab.env.example) e [mappa host/codice](docs/flow-map.md).
+
+- Broker: vhost `<Name>`, progetto Compose `otelplay-<Name>-<hash-del-worktree>`, volume proprio.
+- Dati: `.local/<Name>/data/<Service>/state.db`, un database per host.
 - File: `.local/<Name>/warehouse/{requests,responses,processed,errors}`.
-- Ogni host ha un piccolo processo PowerShell attivo fino alla sua uscita: conserva i log
-  anche dopo che `start` termina. Log Serilog console catturati in `.local/<Name>/logs/<Service>.log` e `.err.log`.
-- Il manifest `.local/<Name>/processes.json` conserva PID e identità di avvio del sistema operativo. `stop` verifica
-  la proprietà del processo e chiede lo shutdown tramite `.local/<Name>/run/<Service>.stop`.
-  È un controllo locale del ciclo di vita, separato dai contratti business del magazzino.
-- `stop` conserva dati e volume. `reset` verifica ownership e percorsi prima della rimozione;
-  non usa prune, non tocca altri progetti Docker e rifiuta link/junction nelle directory da eliminare.
-- Worktree distinti devono comunque scegliere **porte diverse**; esempio A: `-Name us01-a -PortBase 18300`.
-  Non cambiare la base porte di un ambiente esistente: prima `reset` con la configurazione originale.
-- Un arresto del terminale/script può lasciare processi attivi: riprendere con `ready` o `stop`,
-  non avviare una seconda copia. Un PID riciclato viene rifiutato, mai terminato alla cieca.
+- Log: `.local/<Name>/logs/<Service>.log` e `.err.log`, conservati dopo `stop`.
+- `stop` verifica PID e identità di avvio; `reset` controlla owner, porte e link.
+  Niente prune globale. Usare la coppia Name/PortBase originale; worktree diversi
+  richiedono comunque porte diverse.
 
-Per un avvio manuale o debugger, impostare le variabili documentate in
-[infra/lab.env.example](infra/lab.env.example); `Lab__Root` deve essere un percorso assoluto
-comune agli host del solo ambiente scelto. Le variabili corrispondono a `Lab:Name`, `Lab:Root`,
-`Lab:RabbitHost`, `Lab:RabbitPort`, `Lab:RabbitUser`, `Lab:RabbitPassword` in IConfiguration.
-`ASPNETCORE_URLS` sceglie la porta del singolo host. Lo script imposta questi valori esplicitamente.
+Credenziali pubbliche esclusivamente locali: `playground` / `local-playground-only`.
+Con base 18900, management è su `http://127.0.0.1:18901`, Checkout su 18910.
+Un arresto del terminale può lasciare host attivi: usare `ready`/`stop` con i dati
+originali, senza avviare una seconda copia o terminare processi per nome.
+[Diagnosi di avvio, profili e ordini pendenti](docs/getting-started.md#diagnosi).
 
-## Specifiche e consegna
+## Approfondimenti
 
-- [Architettura e confini delle story](docs/architecture/README.md)
-- [Contratti HTTP, messaggi e file v1](docs/contracts/README.md)
-- [Payments.Api: operazioni, scenari e verifiche US03](docs/payments.md)
-- [Checkout e Orders: stati, outbox, retry e verifiche US04](docs/checkout-orders.md)
-- [Esiti e limiti delle verifiche US02](docs/architecture/verification-us02.md)
-- [Specifica US02](https://github.com/MarcoMengoli/OpenTelemetryPlayground/issues/2)
+- [Flusso, code, stati e punti del codice](docs/flow-map.md)
+- [Contratti v1 ed esempi JSON](docs/contracts/README.md)
+- [Payments](docs/payments.md), [Checkout/Orders](docs/checkout-orders.md),
+  [completamento](docs/order-completion.md), [Inventory](docs/inventory.md)
+- [Fulfillment/Couriers](docs/fulfillment.md), [file magazzino](docs/warehouse-files.md),
+  [WarehouseResponse](docs/warehouse-response.md)
+- [E2E US10](docs/end-to-end.md), [guasti US11](docs/failure-scenarios.md),
+  [baseline e consegna US12](docs/delivery.md)
+- [Architettura iniziale US02](docs/architecture/README.md) e
+  [verifiche storiche](docs/architecture/verification-us02.md)
 
-Disponibilità inventario garantita nella prima versione: Inventory e Fulfillment procedono in
-parallelo. Pagamenti, fatture, corrieri e magazzino sono simulati. Nessuna UI richiesta.
-A possiede AGENTS.md, skill, docs/agents, backlog e workflow: questa PR non ne crea copie.
+Le sezioni US02 che parlano di route 501 o attività future descrivono la base storica;
+le guide dei servizi e il codice integrato descrivono il comportamento attuale.
+Disponibilità Inventory garantita: la prenotazione non blocca Fulfillment. Pagamenti,
+fatture, corrieri e magazzino sono simulati. Singola istanza per servizio, nessuna
+transazione distribuita o garanzia di produzione. Retry/duplicati conservano gli ID
+business; budget esauriti richiedono recupero operatore esplicito.
