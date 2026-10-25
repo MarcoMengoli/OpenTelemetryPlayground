@@ -12,6 +12,7 @@
     <Project Path="src/WarehouseResponse.Service/WarehouseResponse.Service.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Playground.EndToEnd/Playground.EndToEnd.csproj" />
     <Project Path="tests/Playground.Tests/Playground.Tests.csproj" />
   </Folder>
 </Solution>

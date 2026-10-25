@@ -82,3 +82,16 @@ jobs:
           if (Test-Path ".local/$env:LAB_CI_NAME/owner.json") {
             ./scripts/lab.ps1 reset -Name $env:LAB_CI_NAME -PortBase 18300
           }
+      - name: Verify complete ecommerce twice
+        id: ecommerce
+        shell: pwsh
+        run: ./scripts/e2e.ps1 -Name us10-${{ github.run_id }}-${{ github.run_attempt }} -PortBase 18500 -NoBuild
+      - name: Preserve end-to-end evidence
+        if: ${{ always() && steps.ecommerce.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ecommerce-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/e2e-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
