@@ -88,6 +88,9 @@ try {
     @{ succeeded=$true; runs=$runs; evidence=$evidence } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $evidence 'summary.json')
     Write-Output "Full ecommerce verified twice with real services; environments reset. Evidence: $evidence"
 } finally {
-    foreach ($key in $keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key]) }
+    foreach ($key in $keys) {
+        if ($null -eq $saved[$key]) { Remove-Item -LiteralPath "Env:$key" -ErrorAction SilentlyContinue }
+        else { [Environment]::SetEnvironmentVariable($key, $saved[$key]) }
+    }
     Pop-Location
 }

@@ -127,8 +127,12 @@ try {
                         }
                         $process = Start-Process @options
                     } finally {
-                        [Environment]::SetEnvironmentVariable('Simulation__Profile', $savedProfile)
-                        [Environment]::SetEnvironmentVariable('Simulation__OrderId', $savedOrder)
+                        # PowerShell can coerce $null to an empty string for this
+                        # .NET call; an absent setting must remain absent.
+                        if ($null -eq $savedProfile) { Remove-Item Env:Simulation__Profile -ErrorAction SilentlyContinue }
+                        else { $env:Simulation__Profile = $savedProfile }
+                        if ($null -eq $savedOrder) { Remove-Item Env:Simulation__OrderId -ErrorAction SilentlyContinue }
+                        else { $env:Simulation__OrderId = $savedOrder }
                     }
                     $process = Get-Process -Id $process.Id
                     $processes += @{ pid=$process.Id; service=$service; identity=(Get-ProcessIdentity $process); executable=$process.Path }
