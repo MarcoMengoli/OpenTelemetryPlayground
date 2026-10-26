@@ -25,7 +25,7 @@ public sealed class FulfillmentConsumer(FulfillmentStore store, FulfillmentProce
                 FulfillOrder message;
                 try
                 {
-                    message = WireJson.Read<FulfillOrder>(Encoding.UTF8.GetString(delivery.Body.Span));
+                    message = WireJson.Read<FulfillOrder>(new UTF8Encoding(false, true).GetString(delivery.Body.Span));
                     if (delivery.BasicProperties.Type != "FulfillOrder.v1" ||
                         delivery.BasicProperties.ContentType != "application/json" ||
                         !Guid.TryParse(delivery.BasicProperties.MessageId, out var id) || id != message.MessageId ||
