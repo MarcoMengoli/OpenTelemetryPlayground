@@ -7,11 +7,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-if (!$IsWindows -and !$IsLinux) { throw 'The real laboratory requires Windows/Linux, PowerShell and Docker; end-to-end NOT verified.' }
-foreach ($command in 'dotnet','docker') { if (!(Get-Command $command -ErrorAction SilentlyContinue)) { throw "Missing $command; end-to-end NOT verified." } }
-& docker info --format '{{.OSType}}'
-if ($LASTEXITCODE -ne 0) { throw 'Docker daemon unavailable; end-to-end NOT verified.' }
+. (Join-Path $PSScriptRoot 'lab-platform.ps1')
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+Push-Location $repo
+try { Assert-LabPrerequisites $repo } finally { Pop-Location }
 $localRoot = Join-Path $repo '.local'
 $evidenceRoot = Join-Path $localRoot 'e2e-evidence'
 foreach ($path in @($localRoot, $evidenceRoot)) {
