@@ -14,6 +14,43 @@ public sealed class FulfillmentBrokerTests
 {
     [BrokerFact]
     [Trait("Category", "Broker")]
+    public async Task Invalid_utf8_is_deadlettered_without_effects_and_valid_retry_preserves_business_data()
+    {
+        using var data = new FulfillmentData();
+        await using var host = await CourierHost.Start(data);
+        await using var broker = await FulfillmentBroker.Open();
+        var store = data.Store();
+        await using var consumer = await broker.Consume(store, host);
+        var message = FulfillmentTests.Message();
+        var json = WireJson.Write(message);
+        var body = Encoding.UTF8.GetBytes(json);
+        var skuOffset = json.IndexOf("BOOK", StringComparison.Ordinal);
+        Assert.True(skuOffset >= 0);
+        // Corrupt a byte inside a JSON string: replacement decoding would still parse.
+        body[Encoding.UTF8.GetByteCount(json.AsSpan(0, skuOffset))] = 0xff;
+        await broker.Publish(message, bytes: body);
+
+        var rejected = await broker.Error();
+        Assert.Equal(body, rejected.Body.ToArray());
+        Assert.Equal(message.MessageId.ToString(), rejected.BasicProperties.MessageId);
+        Assert.Equal(0, data.Count("Fulfillment.Service", "SELECT COUNT(*) FROM fulfillment_work"));
+        Assert.Equal(0, data.Count("Fulfillment.Service", "SELECT COUNT(*) FROM fulfillment_inbox"));
+        Assert.Empty(store.UnsentFiles());
+        Assert.Equal(0, data.Count("Couriers.Api", "SELECT COUNT(*) FROM courier_estimates"));
+
+        // Reusing both identities also proves the rejected body did not poison the inbox.
+        await broker.Publish(message);
+        await FulfillmentTests.Until(() => store.Get(message.OrderId)?.State == "Ready");
+        var request = WireJson.Read<WarehouseRequest>(Assert.Single(store.UnsentFiles()).PayloadJson);
+        Assert.Equal(message.Items, request.Items);
+        Assert.Equal(1, data.Count("Fulfillment.Service", "SELECT COUNT(*) FROM fulfillment_work"));
+        Assert.Equal(1, data.Count("Fulfillment.Service", "SELECT COUNT(*) FROM fulfillment_inbox"));
+        Assert.Equal(1, data.CourierAttempts(message.OrderId));
+        Assert.Null(await broker.Channel.BasicGetAsync(broker.Errors, true));
+    }
+
+    [BrokerFact]
+    [Trait("Category", "Broker")]
     public async Task Rabbit_courier_sqlite_retries_deduplicates_and_deadletters_invalid_or_conflicting_messages()
     {
         using var data = new FulfillmentData();
@@ -174,10 +211,10 @@ internal sealed class FulfillmentBroker(IConnection connection, IChannel channel
         await channel.QueueBindAsync(result.Queue, exchange, "fulfill");
         return result;
     }
-    public async Task Publish(FulfillOrder message, string type = "FulfillOrder.v1", string? body = null)
+    public async Task Publish(FulfillOrder message, string type = "FulfillOrder.v1", string? body = null, byte[]? bytes = null)
     {
         var properties = new BasicProperties { MessageId = message.MessageId.ToString(), ContentType = "application/json", Persistent = true, Type = type };
-        await Channel.BasicPublishAsync(exchange, "fulfill", true, properties, Encoding.UTF8.GetBytes(body ?? WireJson.Write(message)));
+        await Channel.BasicPublishAsync(exchange, "fulfill", true, properties, bytes ?? Encoding.UTF8.GetBytes(body ?? WireJson.Write(message)));
     }
     public async Task<BasicGetResult> Error()
     {
